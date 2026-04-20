@@ -1,0 +1,211 @@
+# toolkit
+
+Reusable Python modules extracted from project-specific code. Zero external dependencies.
+
+## Install
+
+```bash
+pip install -e .
+```
+
+---
+
+## Modules
+
+### `toolkit.telegram_client`
+
+Async Telegram Bot API client with long polling, MarkdownV2 formatting, and message splitting.
+
+#### Quick start
+
+```python
+import asyncio
+from toolkit.telegram_client import TelegramClient, split_message, escape_markdown
+
+async def main():
+    client = TelegramClient(bot_token="123456:ABC-DEF")
+
+    # Send a message
+    result = await client.send_message(chat_id=42, text="Hello from toolkit")
+
+    # Send with MarkdownV2 formatting
+    safe = escape_markdown("Score: 4.5 (out of 5)")
+    await client.send_message(chat_id=42, text=safe, parse_mode="MarkdownV2")
+
+    # Split long text at line boundaries (respects Telegram's 4096-char limit)
+    for chunk in split_message(long_text):
+        await client.send_message(chat_id=42, text=chunk)
+
+asyncio.run(main())
+```
+
+#### Polling for updates
+
+```python
+async def poll():
+    client = TelegramClient(bot_token="123456:ABC-DEF")
+    polling = asyncio.create_task(client.start_polling())
+    try:
+        while True:
+            update = await client.get_next_update()
+            if update is None:
+                continue
+            print(f"{update.user_id}: {update.message_text}")
+            if update.command == "stop":
+                break
+    finally:
+        await client.stop_polling()
+        polling.cancel()
+```
+
+#### Inline keyboards
+
+```python
+from toolkit.telegram_client import InlineButton, InlineKeyboard
+
+keyboard = InlineKeyboard(rows=(
+    (
+        InlineButton(text="Approve", callback_data="yes"),
+        InlineButton(text="Reject", callback_data="no"),
+    ),
+))
+await client.send_with_keyboard(chat_id, "Confirm?", keyboard)
+```
+
+#### Formatting helpers
+
+```python
+from toolkit.telegram_client import escape_markdown, escape_url, format_link
+
+escape_markdown("Hello_world!")      # "Hello\_world\!"
+escape_url("https://x.com/a(b)")    # "https://x.com/a\(b\)"
+format_link("Click here", url)       # "[Click here](https://...)"
+```
+
+#### Public API
+
+| Symbol | Kind | Description |
+|--------|------|-------------|
+| `TelegramClient` | class | Async client with polling, send, edit, keyboard support |
+| `TelegramUpdate` | dataclass | Normalized incoming update (chat_id, user_id, command, args, ...) |
+| `SendResult` | dataclass | Result of a send operation (success, message_id, error) |
+| `InlineButton` | dataclass | Single keyboard button (text + callback_data) |
+| `InlineKeyboard` | dataclass | Button grid with `to_markup()` for the API |
+| `TelegramClientError` | exception | Base error class |
+| `TelegramAPIError` | exception | Telegram returned an error response |
+| `HTTPSTransport` | class | Default HTTP transport (urllib, no deps) |
+| `TelegramTransport` | Protocol | Transport interface for testing/mocking |
+| `split_message()` | function | Split text at line boundaries within a char limit |
+| `escape_markdown()` | function | Escape MarkdownV2 special characters |
+| `escape_url()` | function | Escape `)` and `\` inside inline URLs |
+| `format_link()` | function | Build `[text](url)` with proper escaping |
+| `TELEGRAM_MESSAGE_LIMIT` | int | 4096 |
+| `DEFAULT_REQUEST_TIMEOUT_SECONDS` | float | 30.0 |
+
+---
+
+### `toolkit.json_rpc`
+
+JSON-RPC 2.0 client over stdio. Manages request–response correlation, notification routing, and subprocess lifecycle.
+
+#### Quick start
+
+```python
+import asyncio
+from toolkit.json_rpc import JsonRpcClient, SubprocessTransport
+
+async def main():
+    # Launch a subprocess and talk JSON-RPC over its stdin/stdout
+    transport = await SubprocessTransport.spawn("my-server", "--stdio")
+    client = JsonRpcClient(transport, request_timeout=30.0)
+    await client.start()
+
+    # Send a request and await the correlated response
+    response = await client.request("initialize", {"version": "1.0"})
+    print(response["result"])
+
+    # Send a fire-and-forget notification
+    await client.send_notification("initialized", {})
+
+    # Wait for a specific notification from the server
+    event = await client.next_notification("server/ready")
+
+    await client.stop()
+
+asyncio.run(main())
+```
+
+#### Notification callbacks
+
+```python
+# Route all notifications through a callback
+def on_notification(message):
+    method = message["method"]
+    params = message.get("params", {})
+    print(f"Notification: {method} -> {params}")
+
+client.on_notification(on_notification)
+```
+
+#### Server-initiated requests
+
+```python
+# Handle requests the server sends to the client
+def handle_server_request(message):
+    return {"id": message["id"], "result": {"status": "ok"}}
+
+client.on_server_request(handle_server_request)
+```
+
+#### Custom transport
+
+```python
+from toolkit.json_rpc import JsonRpcTransport
+
+class MyTransport:
+    """Any object matching the JsonRpcTransport protocol."""
+    async def write_line(self, line: str) -> None: ...
+    async def read_line(self) -> str: ...
+    async def close(self) -> None: ...
+```
+
+#### Public API
+
+| Symbol | Kind | Description |
+|--------|------|-------------|
+| `JsonRpcClient` | class | Async client with request correlation and notification routing |
+| `SubprocessTransport` | class | Launches a child process, wires stdin/stdout |
+| `JsonRpcTransport` | Protocol | Transport interface (write_line, read_line, close) |
+| `encode_json_line()` | function | Serialize a dict to compact JSON + newline |
+| `JsonRpcError` | exception | Base error class |
+| `JsonRpcTransportError` | exception | Transport (pipe) failed |
+| `JsonRpcTimeoutError` | exception | No response within timeout |
+| `JsonRpcProtocolError` | exception | Malformed message |
+| `JsonRpcErrorResponse` | exception | Server returned an error (has `.code` and `.data`) |
+
+---
+
+## Project structure
+
+```
+toolkit/
+├── pyproject.toml
+└── src/toolkit/
+    ├── __init__.py
+    ├── telegram_client/
+    │   ├── __init__.py        Public re-exports
+    │   ├── types.py           Data types and errors
+    │   ├── transport.py       HTTP transport (Protocol + urllib impl)
+    │   ├── formatting.py      MarkdownV2 escaping, message splitting
+    │   └── client.py          TelegramClient (polling, send, edit)
+    └── json_rpc/
+        ├── __init__.py        Public re-exports
+        ├── types.py           Error hierarchy
+        ├── transport.py       Subprocess transport + Protocol
+        └── client.py          JsonRpcClient (correlation, routing, lifecycle)
+```
+
+## Consumers
+
+- **codexbot** — uses both `telegram_client` (polling, messaging) and `json_rpc` (Codex app-server communication)
+- **TGbot** — uses `telegram_client.formatting` (escape_markdown, escape_url, format_link)
