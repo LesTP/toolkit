@@ -91,43 +91,6 @@ escape_url("https://x.com/a(b)")    # "https://x.com/a\(b\)"
 format_link("Click here", url)       # "[Click here](https://...)"
 ```
 
-#### Provider examples
-
-```python
-from toolkit.llm_client import LLMConfig, create_provider
-
-# Anthropic (Claude) — pip install toolkit[anthropic]
-anthropic_config = LLMConfig(
-    provider="anthropic",
-    api_key="sk-ant-...",
-    models={"quality": "claude-sonnet-4-5-20250929", "commodity": "claude-haiku-4-5-20251001"},
-)
-
-# OpenAI (GPT) — pip install toolkit[openai]
-openai_config = LLMConfig(
-    provider="openai",
-    api_key="sk-...",
-    models={"quality": "gpt-4o", "commodity": "gpt-4o-mini"},
-)
-
-# Google Gemini — pip install toolkit[google]
-gemini_config = LLMConfig(
-    provider="google",
-    api_key="AIza...",
-    models={"quality": "gemini-2.5-pro", "commodity": "gemini-2.5-flash"},
-)
-
-# Same calling convention for any provider
-provider = create_provider(openai_config)  # or anthropic_config, gemini_config
-response = provider.call(
-    model=provider_config.models["quality"],
-    system_prompt="You are a helpful assistant.",
-    user_prompt="Explain quantum computing in one paragraph.",
-    max_tokens=500,
-)
-print(f"{response.provider}/{response.model}: {response.content[:80]}...")
-```
-
 #### Public API
 
 | Symbol | Kind | Description |
@@ -260,6 +223,43 @@ response = provider.call(
 print(response.content)
 print(f"{response.model} via {response.provider}")
 print(f"Tokens: {response.token_usage}")
+```
+
+#### Provider selection
+
+```python
+from toolkit.llm_client import LLMConfig, create_provider
+
+# Anthropic (Claude) — pip install toolkit[anthropic]
+anthropic_config = LLMConfig(
+    provider="anthropic",
+    api_key="sk-ant-...",
+    models={"quality": "claude-sonnet-4-5-20250929", "commodity": "claude-haiku-4-5-20251001"},
+)
+
+# OpenAI (GPT) — pip install toolkit[openai]
+openai_config = LLMConfig(
+    provider="openai",
+    api_key="sk-...",
+    models={"quality": "gpt-4o", "commodity": "gpt-4o-mini"},
+)
+
+# Google Gemini — pip install toolkit[google]
+gemini_config = LLMConfig(
+    provider="google",
+    api_key="AIza...",
+    models={"quality": "gemini-2.5-pro", "commodity": "gemini-2.5-flash"},
+)
+
+# Same calling convention for any provider
+provider = create_provider(openai_config)
+response = provider.call(
+    model=openai_config.models["quality"],
+    system_prompt="You are a helpful assistant.",
+    user_prompt="Explain quantum computing in one paragraph.",
+    max_tokens=500,
+)
+print(f"{response.provider}/{response.model}: {response.content[:80]}...")
 ```
 
 #### Public API
