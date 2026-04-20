@@ -7,5 +7,10 @@ name = "toolkit"
 version = "0.1.0"
 requires-python = ">=3.9"
 
+[project.optional-dependencies]
+anthropic = ["anthropic"]
+openai = ["openai"]
+google = ["google-genai"]
+
 [tool.setuptools.packages.find]
 where = ["src"]

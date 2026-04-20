@@ -1,11 +1,20 @@
 # toolkit
 
-Reusable Python modules extracted from project-specific code. Zero external dependencies.
+Reusable Python modules extracted from project-specific code. Core has zero external dependencies; optional extras available for provider-specific integrations.
 
 ## Install
 
 ```bash
 pip install -e .
+
+# With Anthropic provider support:
+pip install -e ".[anthropic]"
+
+# With OpenAI provider support:
+pip install -e ".[openai]"
+
+# With Google Gemini provider support:
+pip install -e ".[google]"
 ```
 
 ---
@@ -80,6 +89,43 @@ from toolkit.telegram_client import escape_markdown, escape_url, format_link
 escape_markdown("Hello_world!")      # "Hello\_world\!"
 escape_url("https://x.com/a(b)")    # "https://x.com/a\(b\)"
 format_link("Click here", url)       # "[Click here](https://...)"
+```
+
+#### Provider examples
+
+```python
+from toolkit.llm_client import LLMConfig, create_provider
+
+# Anthropic (Claude) — pip install toolkit[anthropic]
+anthropic_config = LLMConfig(
+    provider="anthropic",
+    api_key="sk-ant-...",
+    models={"quality": "claude-sonnet-4-5-20250929", "commodity": "claude-haiku-4-5-20251001"},
+)
+
+# OpenAI (GPT) — pip install toolkit[openai]
+openai_config = LLMConfig(
+    provider="openai",
+    api_key="sk-...",
+    models={"quality": "gpt-4o", "commodity": "gpt-4o-mini"},
+)
+
+# Google Gemini — pip install toolkit[google]
+gemini_config = LLMConfig(
+    provider="google",
+    api_key="AIza...",
+    models={"quality": "gemini-2.5-pro", "commodity": "gemini-2.5-flash"},
+)
+
+# Same calling convention for any provider
+provider = create_provider(openai_config)  # or anthropic_config, gemini_config
+response = provider.call(
+    model=provider_config.models["quality"],
+    system_prompt="You are a helpful assistant.",
+    user_prompt="Explain quantum computing in one paragraph.",
+    max_tokens=500,
+)
+print(f"{response.provider}/{response.model}: {response.content[:80]}...")
 ```
 
 #### Public API
@@ -185,6 +231,53 @@ class MyTransport:
 
 ---
 
+### `toolkit.llm_client`
+
+Provider-agnostic LLM client. Supports model tiers (quality/commodity) and lazy provider loading. Currently implements Anthropic (Claude), OpenAI (GPT), and Google Gemini; additional providers are additive.
+
+#### Quick start
+
+```python
+from toolkit.llm_client import LLMConfig, create_provider
+
+config = LLMConfig(
+    provider="anthropic",
+    api_key="sk-ant-...",
+    models={
+        "quality": "claude-sonnet-4-5-20250929",
+        "commodity": "claude-haiku-4-5-20251001",
+    },
+)
+
+provider = create_provider(config)
+response = provider.call(
+    model=config.models["quality"],
+    system_prompt="You are a technical writer.",
+    user_prompt="Summarize this README: ...",
+    max_tokens=2000,
+)
+
+print(response.content)
+print(f"{response.model} via {response.provider}")
+print(f"Tokens: {response.token_usage}")
+```
+
+#### Public API
+
+| Symbol | Kind | Description |
+|--------|------|-------------|
+| `LLMConfig` | dataclass | Provider + credentials + model tier mapping |
+| `LLMResponse` | dataclass | Structured response (content, model, provider, token_usage) |
+| `LLMProvider` | ABC | Abstract base class for providers |
+| `AnthropicProvider` | class | Anthropic (Claude) implementation |
+| `OpenAIProvider` | class | OpenAI (GPT) implementation |
+| `GeminiProvider` | class | Google Gemini implementation |
+| `create_provider()` | function | Factory: config → provider instance |
+| `LLMAPIError` | exception | API call failed (rate limit, auth, network) |
+| `LLMResponseError` | exception | Empty or unparseable response |
+
+---
+
 ## Project structure
 
 ```
@@ -192,6 +285,10 @@ toolkit/
 ├── pyproject.toml
 └── src/toolkit/
     ├── __init__.py
+    ├── llm_client/
+    │   ├── __init__.py        Public re-exports
+    │   ├── types.py           LLMConfig, LLMResponse, error classes
+    │   └── providers.py       LLMProvider ABC, AnthropicProvider, factory
     ├── telegram_client/
     │   ├── __init__.py        Public re-exports
     │   ├── types.py           Data types and errors
@@ -208,4 +305,4 @@ toolkit/
 ## Consumers
 
 - **codexbot** — uses both `telegram_client` (polling, messaging) and `json_rpc` (Codex app-server communication)
-- **TGbot** — uses `telegram_client.formatting` (escape_markdown, escape_url, format_link)
+- **TGbot** — uses `telegram_client.formatting` (escape_markdown, escape_url, format_link) and `llm_client` (LLM provider abstraction)
