@@ -11,6 +11,7 @@ requires-python = ">=3.9"
 anthropic = ["anthropic"]
 openai = ["openai"]
 google = ["google-genai"]
+ws = ["websockets>=13.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

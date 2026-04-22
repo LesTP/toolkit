@@ -23,5 +23,15 @@ __all__ = [
     "JsonRpcTransport",
     "JsonRpcTransportError",
     "SubprocessTransport",
+    "WebSocketTransport",
     "encode_json_line",
 ]
+
+
+def __getattr__(name: str) -> object:
+    if name == "WebSocketTransport":
+        from .transport_ws import WebSocketTransport
+
+        globals()["WebSocketTransport"] = WebSocketTransport
+        return WebSocketTransport
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

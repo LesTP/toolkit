@@ -15,6 +15,9 @@ pip install -e ".[openai]"
 
 # With Google Gemini provider support:
 pip install -e ".[google]"
+
+# With WebSocket transport support:
+pip install -e ".[ws]"
 ```
 
 ---
@@ -115,7 +118,7 @@ format_link("Click here", url)       # "[Click here](https://...)"
 
 ### `toolkit.json_rpc`
 
-JSON-RPC 2.0 client over stdio. Manages request–response correlation, notification routing, and subprocess lifecycle.
+JSON-RPC 2.0 client over stdio or WebSocket. Manages request–response correlation, notification routing, and transport lifecycle.
 
 #### Quick start
 
@@ -166,6 +169,25 @@ def handle_server_request(message):
 client.on_server_request(handle_server_request)
 ```
 
+#### WebSocket transport
+
+```python
+from toolkit.json_rpc import JsonRpcClient, WebSocketTransport
+
+async def main():
+    # Connect to a JSON-RPC server over WebSocket
+    transport = await WebSocketTransport.connect("ws://localhost:4242")
+    client = JsonRpcClient(transport, request_timeout=30.0)
+    await client.start()
+
+    response = await client.request("initialize", {"version": "1.0"})
+    print(response["result"])
+
+    await client.stop()
+```
+
+`WebSocketTransport.connect()` retries automatically until the server is reachable or the timeout (default 30s) expires. Requires `pip install toolkit[ws]`.
+
 #### Custom transport
 
 ```python
@@ -184,6 +206,7 @@ class MyTransport:
 |--------|------|-------------|
 | `JsonRpcClient` | class | Async client with request correlation and notification routing |
 | `SubprocessTransport` | class | Launches a child process, wires stdin/stdout |
+| `WebSocketTransport` | class | Connects to a WS server (requires `toolkit[ws]`) |
 | `JsonRpcTransport` | Protocol | Transport interface (write_line, read_line, close) |
 | `encode_json_line()` | function | Serialize a dict to compact JSON + newline |
 | `JsonRpcError` | exception | Base error class |
@@ -296,9 +319,10 @@ toolkit/
     │   ├── formatting.py      MarkdownV2 escaping, message splitting
     │   └── client.py          TelegramClient (polling, send, edit)
     └── json_rpc/
-        ├── __init__.py        Public re-exports
+        ├── __init__.py        Public re-exports (lazy-loads WebSocketTransport)
         ├── types.py           Error hierarchy
         ├── transport.py       Subprocess transport + Protocol
+        ├── transport_ws.py    WebSocket transport (optional websockets dep)
         └── client.py          JsonRpcClient (correlation, routing, lifecycle)
 ```
 
