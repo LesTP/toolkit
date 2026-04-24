@@ -29,11 +29,14 @@ Consumers waiting: Year-in-Search (Phase 3 — HDBSCAN flat clustering), Phosphe
 | Telegram Client | Complete |
 | JSON-RPC Client | Complete |
 
-## Phase 3: RAPTOR recursive clustering
+## Phase 3: RAPTOR recursive clustering — PAUSED
+
+**Status:** Step 1 complete (raptor_embedder added to config + ARCH spec). Steps 2-5 paused — waiting for Phosphene to clarify RAPTOR requirements.
+**Reason:** RAPTOR is only needed by Phosphene. Year-in-Search needs only HDBSCAN + UMAP, which are done.
 
 **Regime:** Build
 **Scope:** Implement RAPTOR strategy (cluster → summarize → embed → recurse), populate ClusterResult.tree, validate RAPTOR callbacks.
-**Contract change:** Add `raptor_embedder: Callable | None = None` to ClusterConfig and ARCH spec.
+**Contract change:** `raptor_embedder: Callable | None = None` added to ClusterConfig (Step 1, done).
 
 ### Steps
 
