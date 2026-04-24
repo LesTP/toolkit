@@ -8,20 +8,21 @@ from sentence_transformers import SentenceTransformer
 from .types import EmbeddingConfig, EmbeddingInputError, EmbeddingModelError, EmbeddingResult
 
 # Module-level model cache: avoid reloading the same model repeatedly.
-_model_cache: dict[str, SentenceTransformer] = {}
+_model_cache: dict[tuple[str, str], SentenceTransformer] = {}
 
 
 def _load_model(model_name: str, device: str) -> SentenceTransformer:
-    """Load a sentence-transformers model, caching by name."""
-    if model_name not in _model_cache:
+    """Load a sentence-transformers model, caching by (name, device)."""
+    key = (model_name, device)
+    if key not in _model_cache:
         try:
-            _model_cache[model_name] = SentenceTransformer(model_name, device=device)
+            _model_cache[key] = SentenceTransformer(model_name, device=device)
         except Exception as exc:
             raise EmbeddingModelError(
                 f"Failed to load model '{model_name}': {exc}",
                 model=model_name,
             ) from exc
-    return _model_cache[model_name]
+    return _model_cache[key]
 
 
 def embed(

@@ -8,7 +8,7 @@ Convert text into vector embeddings for downstream similarity computation, clust
 ### embed
 - **Signature:** `embed(texts: list[str], config: EmbeddingConfig | None = None) -> EmbeddingResult`
 - **Parameters:**
-  - texts: list[str] — input texts to embed. Must be non-empty. Empty strings are permitted (produce zero vectors).
+  - texts: list[str] — input texts to embed. Must be non-empty. Empty strings are permitted (produce valid vectors).
   - config: EmbeddingConfig | None — model and cache settings. If None, uses defaults.
     ```python
     @dataclass
