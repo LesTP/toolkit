@@ -1,5 +1,23 @@
 # Toolkit — Dev Log
 
+## 2026-04-24 — Clustering Phase 2 complete: UMAP dimensionality reduction
+
+**Module:** Clustering | **Phase:** 2 | **Regime:** Build | **Result:** 29 tests passing (5 new)
+
+### What was built
+- Optional UMAP reduction in `_cluster_hdbscan` — when `reduce_dims` is set, reduces embeddings before clustering
+- Lazy import of `umap` (only loaded when reduction is requested)
+- `random_state=42` for deterministic reduction
+
+### Decisions made
+- UMAP uses fixed defaults (n_neighbors, min_dist) — ARCH spec only exposes `reduce_dims`
+- `random_state=42` ensures reproducibility at cost of a harmless warning
+
+### Review findings (post-phase)
+- Clean phase. No issues found.
+
+---
+
 ## 2026-04-24 — Clustering Phase 1 complete: Types and HDBSCAN flat clustering
 
 **Module:** Clustering | **Phase:** 1 | **Regime:** Build | **Result:** 24 tests passing

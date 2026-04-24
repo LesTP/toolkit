@@ -107,6 +107,51 @@ class TestCluster:
 
 
 # ---------------------------------------------------------------------------
+# UMAP dimensionality reduction
+# ---------------------------------------------------------------------------
+
+
+def _make_high_dim_clusters(n_clusters=3, points_per=20, dims=384):
+    """Generate well-separated clusters in high-dimensional space."""
+    rng = np.random.RandomState(42)
+    groups = []
+    for i in range(n_clusters):
+        center = np.zeros(dims)
+        center[i % dims] = 5.0
+        groups.append(rng.randn(points_per, dims) * 0.1 + center)
+    return np.vstack(groups).astype(np.float32)
+
+
+class TestUMAPReduction:
+    def test_reduce_dims_finds_clusters(self):
+        data = _make_high_dim_clusters(3)
+        result = cluster(data, ClusterConfig(reduce_dims=50))
+        assert result.n_clusters == 3
+
+    def test_labels_shape_with_reduction(self):
+        data = _make_high_dim_clusters(3, points_per=15)
+        result = cluster(data, ClusterConfig(reduce_dims=10))
+        assert result.labels.shape == (45,)
+
+    def test_reduce_dims_none_skips_reduction(self):
+        """Default reduce_dims=None should not change behavior."""
+        data = _make_clusters(3)
+        r1 = cluster(data)
+        r2 = cluster(data, ClusterConfig(reduce_dims=None))
+        np.testing.assert_array_equal(r1.labels, r2.labels)
+
+    def test_noise_handling_with_reduction(self):
+        data = _make_high_dim_clusters(2)
+        result = cluster(data, ClusterConfig(reduce_dims=20))
+        assert result.n_noise == int(np.sum(result.labels == -1))
+
+    def test_tree_still_none_with_reduction(self):
+        data = _make_high_dim_clusters(2)
+        result = cluster(data, ClusterConfig(reduce_dims=30))
+        assert result.tree is None
+
+
+# ---------------------------------------------------------------------------
 # Error paths
 # ---------------------------------------------------------------------------
 

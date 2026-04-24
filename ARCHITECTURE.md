@@ -36,7 +36,7 @@ Codexbot:        Telegram updates → Telegram Client (polling) → Command Rout
 | Order | Module | Rationale | Status |
 |-------|--------|-----------|--------|
 | 1 | Embedding | Leaf, simplest module. Year-in-Search needs it first. | Complete |
-| 2 | Clustering | Leaf, depends on Embedding outputs conceptually but not as a code dependency. Year-in-Search needs both. | Phase 1 complete |
+| 2 | Clustering | Leaf, depends on Embedding outputs conceptually but not as a code dependency. Year-in-Search needs both. | Phase 2 complete |
 | 3 | LLM Client | Leaf, more complex (multi-provider, rate limits). Builds on TGBot's tested AnthropicProvider. | Complete |
 | 4 | Telegram Client | Leaf. Sending side working in TGBot, receiving side working in codexbot. Merge rather than new build. | Complete |
 | 5 | JSON-RPC Client | Leaf. Working in codexbot. Extract if second consumer materializes. | Complete |

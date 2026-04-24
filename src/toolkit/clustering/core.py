@@ -63,15 +63,22 @@ def _cluster_hdbscan(
     embeddings: np.ndarray,
     config: ClusterConfig,
 ) -> ClusterResult:
-    """Run HDBSCAN flat clustering."""
+    """Run HDBSCAN flat clustering, with optional UMAP reduction."""
     import hdbscan
+
+    data = embeddings
+    if config.reduce_dims is not None:
+        import umap
+
+        reducer = umap.UMAP(n_components=config.reduce_dims, random_state=42)
+        data = reducer.fit_transform(data)
 
     clusterer = hdbscan.HDBSCAN(
         min_cluster_size=config.min_cluster_size,
         min_samples=config.min_samples,
         metric=config.metric,
     )
-    labels = clusterer.fit_predict(embeddings)
+    labels = clusterer.fit_predict(data)
     labels = np.asarray(labels, dtype=np.int32)
 
     n_noise = int(np.sum(labels == -1))
