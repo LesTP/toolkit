@@ -1,5 +1,27 @@
 # Toolkit — Dev Log
 
+## 2026-04-24 — Clustering Phase 1 complete: Types and HDBSCAN flat clustering
+
+**Module:** Clustering | **Phase:** 1 | **Regime:** Build | **Result:** 24 tests passing
+
+### What was built
+- `types.py` — ClusterConfig, ClusterResult, ClusterStrategy enum, ClusterLayer, ClusterInputError, ClusterStrategyError
+- `core.py` — `cluster()` function with HDBSCAN strategy via lazy `import hdbscan`
+- `__init__.py` — public exports for all types and the cluster function
+- RAPTOR strategy raises ClusterStrategyError (not yet implemented)
+- `reduce_dims` silently ignored (UMAP deferred to Phase 2)
+
+### Decisions made
+- Lazy import for hdbscan (inside `_cluster_hdbscan`) — avoids import cost when module is loaded but not used
+- Plain `set(labels) - {-1}` for cluster counting — simple, correct for HDBSCAN output
+- All RAPTOR-related types defined now (ClusterLayer, tree field) but only populated in Phase 3
+
+### Review findings (post-phase)
+- **Fixed:** Removed unused `field` import from types.py
+- Defensive "unknown strategy" branch in core.py is unreachable but kept as guard
+
+---
+
 ## 2026-04-24 — Embedding Phase 3 complete: Caching
 
 **Module:** Embedding | **Phase:** 3 | **Regime:** Build | **Result:** 43 tests passing (12 new)
