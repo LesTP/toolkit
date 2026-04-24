@@ -38,6 +38,7 @@ class ClusterConfig:
         reduce_dims: UMAP reduction before clustering. None = skip.
         raptor_max_depth: RAPTOR only: max recursion depth.
         raptor_summarizer: RAPTOR only: function to summarize a cluster's texts.
+        raptor_embedder: RAPTOR only: function to embed summary texts into vectors.
     """
 
     strategy: ClusterStrategy = ClusterStrategy.HDBSCAN
@@ -47,6 +48,7 @@ class ClusterConfig:
     reduce_dims: Optional[int] = None
     raptor_max_depth: int = 3
     raptor_summarizer: Optional[Callable] = None
+    raptor_embedder: Optional[Callable] = None
 
 
 # ---------------------------------------------------------------------------

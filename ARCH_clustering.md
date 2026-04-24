@@ -20,11 +20,12 @@ Group embeddings into semantically coherent clusters. Strategy-agnostic — cons
         reduce_dims: int | None = None       # UMAP reduction before clustering. None = skip
         raptor_max_depth: int = 3             # RAPTOR only: max recursion depth
         raptor_summarizer: Callable | None = None  # RAPTOR only: function to summarize a cluster
+        raptor_embedder: Callable | None = None    # RAPTOR only: function to embed summaries into vectors
     ```
 - **Returns:** ClusterResult
 - **Errors:**
   - `ClusterInputError` — fewer than 2 embeddings, or embedding_dim mismatch across rows
-  - `ClusterStrategyError` — unknown strategy or missing required parameter (e.g., RAPTOR without summarizer)
+  - `ClusterStrategyError` — unknown strategy or missing required parameter (e.g., RAPTOR without summarizer or embedder)
   - `ValueError` — min_cluster_size < 2 or min_samples < 1
 
 ### ClusterStrategy enum
@@ -37,7 +38,7 @@ class ClusterStrategy(str, Enum):
 ## Inputs
 - Pre-computed embeddings (ndarray from Embedding module)
 - ClusterConfig specifying strategy and parameters
-- For RAPTOR strategy: a `raptor_summarizer` callable that takes a list of texts and returns a summary string. The clustering module calls this but does not implement it — consumers provide their own summarization logic (typically via LLM Client).
+- For RAPTOR strategy: a `raptor_summarizer` callable that takes a list of texts and returns a summary string, and a `raptor_embedder` callable that takes a list of strings and returns an ndarray of embeddings. The clustering module calls these but does not implement them — consumers provide their own logic (typically via Embedding and LLM Client modules).
 
 ## Outputs
 - **ClusterResult:**
@@ -84,10 +85,14 @@ print(f"Found {clusters.n_clusters} clusters, {clusters.n_noise} noise items")
 def summarize_cluster(texts: list[str]) -> str:
     return llm_client.complete(f"Summarize these observations: {texts}").content
 
+def embed_texts(texts: list[str]) -> np.ndarray:
+    return embed(texts).vectors
+
 clusters = cluster(result.vectors, ClusterConfig(
     strategy=ClusterStrategy.RAPTOR,
     raptor_max_depth=3,
     raptor_summarizer=summarize_cluster,
+    raptor_embedder=embed_texts,
 ))
 for layer in clusters.tree:
     print(f"Depth {layer.depth}: {len(layer.cluster_ids)} clusters")
