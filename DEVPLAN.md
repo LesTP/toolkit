@@ -1,30 +1,27 @@
 ---
-phase: 3
-phase_title: ""
-step: 0
-regime: ""
-review_done: false
+module: embedding
+status: complete
 ---
 
 # Toolkit — Dev Plan
 
 ## Cold Start
-Active module: **Embedding** (first in implementation sequence).
+Active module: **Embedding** — complete.
 Load: ARCH_embedding.md for contract, PROJECT.md for constraints, ARCHITECTURE.md for context.
-Consumers waiting: Year-in-Search (Phases 2–3), Phosphene (Seeding, Attention Filter, Distillation, Explorer).
 
 ## Current Status
 | Module | Status |
 |--------|--------|
-| Embedding | **In progress** — Phase 2 complete |
-| Clustering | Not started (next after Embedding) |
+| Embedding | **Complete** |
+| Clustering | Not started (next) |
 | LLM Client | Complete |
 | Telegram Client | Complete |
 | JSON-RPC Client | Complete |
 
 ## Completed Phases
-- **Phase 1:** Types and core embed function — 19 tests passing. See DEVLOG 2026-04-24.
+- **Phase 1:** Types and core embed function — 19 tests. See DEVLOG 2026-04-24.
 - **Phase 2:** Similarity functions — 12 new tests (31 total). See DEVLOG 2026-04-24.
+- **Phase 3:** Caching — 12 new tests (43 total). See DEVLOG 2026-04-24.
 
 ---
 
@@ -34,3 +31,4 @@ Consumers waiting: Year-in-Search (Phases 2–3), Phosphene (Seeding, Attention 
 | 2026-04-24 | Initial DEVPLAN.md | Track Embedding module implementation |
 | 2026-04-24 | Phase 1 complete, cleaned up for Phase 2 | Phase completion protocol |
 | 2026-04-24 | Phase 2 complete, cleaned up for Phase 3 | Phase completion protocol |
+| 2026-04-24 | Phase 3 complete, Embedding module finished | Phase completion protocol |

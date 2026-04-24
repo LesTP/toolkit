@@ -2,6 +2,9 @@
 Core embedding function: text → vector embeddings via sentence-transformers.
 """
 
+import hashlib
+import os
+
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
@@ -9,6 +12,36 @@ from .types import EmbeddingConfig, EmbeddingInputError, EmbeddingModelError, Em
 
 # Module-level model cache: avoid reloading the same model repeatedly.
 _model_cache: dict[tuple[str, str], SentenceTransformer] = {}
+
+# Module-level embedding cache: (model, text_hash) → vector.
+_embedding_cache: dict[tuple[str, str], np.ndarray] = {}
+
+
+def _text_hash(text: str) -> str:
+    """Stable hash for cache key."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _disk_cache_path(cache_dir: str, model: str, text_h: str) -> str:
+    """Return file path for a cached embedding vector."""
+    model_dir = os.path.join(cache_dir, model.replace("/", "_"))
+    return os.path.join(model_dir, f"{text_h}.npy")
+
+
+def _load_from_disk(path: str) -> np.ndarray | None:
+    """Load a cached vector from disk, or None if missing/corrupt."""
+    if os.path.exists(path):
+        try:
+            return np.load(path)
+        except Exception:
+            return None
+    return None
+
+
+def _save_to_disk(path: str, vector: np.ndarray) -> None:
+    """Save a vector to disk cache."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    np.save(path, vector)
 
 
 def _load_model(model_name: str, device: str) -> SentenceTransformer:
@@ -52,23 +85,58 @@ def embed(
     if config.batch_size < 1:
         raise ValueError(f"batch_size must be >= 1, got {config.batch_size}")
 
-    model = _load_model(config.model, config.device)
+    # Check in-memory cache, then disk cache, for each text.
+    hashes = [_text_hash(t) for t in texts]
+    cached_vectors: dict[int, np.ndarray] = {}
+    texts_to_compute: list[tuple[int, str]] = []
 
-    vectors = model.encode(
-        texts,
-        batch_size=config.batch_size,
-        normalize_embeddings=True,
-        show_progress_bar=False,
-    )
+    for i, (text, h) in enumerate(zip(texts, hashes)):
+        cache_key = (config.model, h)
+        if cache_key in _embedding_cache:
+            cached_vectors[i] = _embedding_cache[cache_key]
+        elif config.cache_dir is not None:
+            disk_vec = _load_from_disk(
+                _disk_cache_path(config.cache_dir, config.model, h)
+            )
+            if disk_vec is not None:
+                cached_vectors[i] = disk_vec
+                _embedding_cache[cache_key] = disk_vec
+            else:
+                texts_to_compute.append((i, text))
+        else:
+            texts_to_compute.append((i, text))
 
-    vectors = np.asarray(vectors, dtype=np.float32)
+    # Compute only the missing embeddings.
+    if texts_to_compute:
+        model = _load_model(config.model, config.device)
+        new_texts = [t for _, t in texts_to_compute]
+        new_vectors = model.encode(
+            new_texts,
+            batch_size=config.batch_size,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )
+        new_vectors = np.asarray(new_vectors, dtype=np.float32)
+
+        for j, (i, _) in enumerate(texts_to_compute):
+            vec = new_vectors[j]
+            cached_vectors[i] = vec
+            _embedding_cache[(config.model, hashes[i])] = vec
+            if config.cache_dir is not None:
+                _save_to_disk(
+                    _disk_cache_path(config.cache_dir, config.model, hashes[i]),
+                    vec,
+                )
+
+    # Assemble result in original order.
+    vectors = np.stack([cached_vectors[i] for i in range(len(texts))])
 
     return EmbeddingResult(
         vectors=vectors,
         model=config.model,
         dimension=vectors.shape[1],
-        from_cache=0,
-        computed=len(texts),
+        from_cache=len(texts) - len(texts_to_compute),
+        computed=len(texts_to_compute),
     )
 
 

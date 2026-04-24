@@ -1,5 +1,27 @@
 # Toolkit — Dev Log
 
+## 2026-04-24 — Embedding Phase 3 complete: Caching
+
+**Module:** Embedding | **Phase:** 3 | **Regime:** Build | **Result:** 43 tests passing (12 new)
+
+### What was built
+- In-memory embedding cache: plain dict keyed on `(model, text_hash)`, avoids re-encoding already-seen texts
+- Disk cache: when `cache_dir` is set, saves/loads vectors as `.npy` files in `cache_dir/model_name/hash.npy`
+- `from_cache` and `computed` counts now reflect actual cache behavior (mixed hits handled correctly)
+- SHA-256 text hashing for stable, collision-resistant cache keys
+
+### Decisions made
+- Plain dict (unlimited) instead of LRU — spec says "bounded by available memory", no eviction needed
+- Disk cache stored as individual `.npy` files per vector (simple, no index file needed)
+- Corrupt `.npy` files silently re-computed (cache is best-effort, re-computing is always safe)
+- Model name used as subdirectory (with `/` replaced by `_`) for disk isolation
+
+### Review findings (post-phase)
+- **Fixed:** Added `setup_method` to TestEmbed for cache isolation — module-level cache could cause test order dependencies
+- No correctness issues, no architecture drift
+
+---
+
 ## 2026-04-24 — Embedding Phase 2 complete: Similarity functions
 
 **Module:** Embedding | **Phase:** 2 | **Regime:** Build | **Result:** 31 tests passing (12 new)

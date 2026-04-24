@@ -20,6 +20,10 @@ from toolkit.embedding import (
 
 
 class TestEmbed:
+    def setup_method(self):
+        from toolkit.embedding.core import _embedding_cache
+        _embedding_cache.clear()
+
     def test_single_text_shape(self):
         result = embed(["hello world"])
         assert result.vectors.shape == (1, 384)
@@ -251,3 +255,109 @@ class TestBatchSimilarity:
         candidates = np.array([[1.0, 0.0, 0.0]])
         with pytest.raises(ValueError, match="mismatch"):
             batch_similarity(query, candidates)
+
+
+# ---------------------------------------------------------------------------
+# In-memory cache
+# ---------------------------------------------------------------------------
+
+
+class TestInMemoryCache:
+    def setup_method(self):
+        """Clear embedding cache before each test."""
+        from toolkit.embedding.core import _embedding_cache
+        _embedding_cache.clear()
+
+    def test_second_call_fully_cached(self):
+        r1 = embed(["cache test"])
+        r2 = embed(["cache test"])
+        assert r1.computed == 1
+        assert r2.computed == 0
+        assert r2.from_cache == 1
+
+    def test_cached_vectors_match(self):
+        r1 = embed(["cached vector"])
+        r2 = embed(["cached vector"])
+        np.testing.assert_array_equal(r1.vectors, r2.vectors)
+
+    def test_mixed_cache_hits(self):
+        embed(["alpha", "beta"])
+        r2 = embed(["beta", "gamma"])
+        assert r2.from_cache == 1
+        assert r2.computed == 1
+
+    def test_mixed_cache_vectors_match(self):
+        r1 = embed(["alpha", "beta"])
+        r2 = embed(["beta", "gamma"])
+        # beta vector should match between calls
+        np.testing.assert_allclose(r1.vectors[1], r2.vectors[0], atol=1e-6)
+
+    def test_cache_keyed_on_model(self):
+        from toolkit.embedding.core import _embedding_cache, _text_hash
+        embed(["model key test"])
+        h = _text_hash("model key test")
+        assert ("all-MiniLM-L6-v2", h) in _embedding_cache
+        assert ("other-model", h) not in _embedding_cache
+
+    def test_all_cached_skips_model_load(self):
+        """If everything is cached, result should still be correct."""
+        r1 = embed(["skip load test"])
+        r2 = embed(["skip load test"])
+        assert r2.from_cache == 1
+        assert r2.computed == 0
+        assert r2.dimension == r1.dimension
+
+
+# ---------------------------------------------------------------------------
+# Disk cache
+# ---------------------------------------------------------------------------
+
+
+class TestDiskCache:
+    def setup_method(self):
+        """Clear embedding cache before each test."""
+        from toolkit.embedding.core import _embedding_cache
+        _embedding_cache.clear()
+
+    def test_disk_cache_writes_files(self, tmp_path):
+        cfg = EmbeddingConfig(cache_dir=str(tmp_path))
+        embed(["disk write test"], cfg)
+        npy_files = list(tmp_path.rglob("*.npy"))
+        assert len(npy_files) == 1
+
+    def test_disk_cache_survives_memory_clear(self, tmp_path):
+        from toolkit.embedding.core import _embedding_cache
+        cfg = EmbeddingConfig(cache_dir=str(tmp_path))
+        r1 = embed(["disk survive test"], cfg)
+        _embedding_cache.clear()
+        r2 = embed(["disk survive test"], cfg)
+        assert r2.from_cache == 1
+        assert r2.computed == 0
+        np.testing.assert_allclose(r1.vectors, r2.vectors, atol=1e-6)
+
+    def test_disk_cache_mixed_hits(self, tmp_path):
+        from toolkit.embedding.core import _embedding_cache
+        cfg = EmbeddingConfig(cache_dir=str(tmp_path))
+        embed(["disk a", "disk b"], cfg)
+        _embedding_cache.clear()
+        r2 = embed(["disk b", "disk c"], cfg)
+        assert r2.from_cache == 1
+        assert r2.computed == 1
+
+    def test_no_disk_writes_without_cache_dir(self, tmp_path):
+        """cache_dir=None should not write any files anywhere."""
+        embed(["no disk test"])
+        npy_files = list(tmp_path.rglob("*.npy"))
+        assert len(npy_files) == 0
+
+    def test_disk_cache_model_isolation(self, tmp_path):
+        cfg = EmbeddingConfig(cache_dir=str(tmp_path))
+        embed(["isolation test"], cfg)
+        model_dirs = [d.name for d in tmp_path.iterdir() if d.is_dir()]
+        assert "all-MiniLM-L6-v2" in model_dirs
+
+    def test_disk_cache_multiple_texts(self, tmp_path):
+        cfg = EmbeddingConfig(cache_dir=str(tmp_path))
+        embed(["multi a", "multi b", "multi c"], cfg)
+        npy_files = list(tmp_path.rglob("*.npy"))
+        assert len(npy_files) == 3
