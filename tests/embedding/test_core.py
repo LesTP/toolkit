@@ -8,7 +8,9 @@ from toolkit.embedding import (
     EmbeddingInputError,
     EmbeddingModelError,
     EmbeddingResult,
+    batch_similarity,
     embed,
+    similarity,
 )
 
 
@@ -148,3 +150,104 @@ class TestTypes:
         e = EmbeddingInputError("empty")
         assert e.message == "empty"
         assert str(e) == "empty"
+
+
+# ---------------------------------------------------------------------------
+# Similarity
+# ---------------------------------------------------------------------------
+
+
+class TestSimilarity:
+    def test_identical_vectors(self):
+        v = np.array([1.0, 0.0, 0.0])
+        assert similarity(v, v) == pytest.approx(1.0)
+
+    def test_orthogonal_vectors(self):
+        a = np.array([1.0, 0.0, 0.0])
+        b = np.array([0.0, 1.0, 0.0])
+        assert similarity(a, b) == pytest.approx(0.0)
+
+    def test_opposite_vectors(self):
+        a = np.array([1.0, 0.0])
+        b = np.array([-1.0, 0.0])
+        assert similarity(a, b) == pytest.approx(-1.0)
+
+    def test_returns_float(self):
+        a = np.array([0.5, 0.5])
+        b = np.array([0.5, 0.5])
+        result = similarity(a, b)
+        assert isinstance(result, float)
+
+    def test_dimension_mismatch_raises(self):
+        a = np.array([1.0, 0.0])
+        b = np.array([1.0, 0.0, 0.0])
+        with pytest.raises(ValueError, match="mismatch"):
+            similarity(a, b)
+
+    def test_with_real_embeddings(self):
+        result = embed(["cat", "dog", "quantum physics"])
+        # cat and dog should be more similar than cat and quantum physics
+        sim_close = similarity(result.vectors[0], result.vectors[1])
+        sim_far = similarity(result.vectors[0], result.vectors[2])
+        assert sim_close > sim_far
+
+
+# ---------------------------------------------------------------------------
+# Batch similarity
+# ---------------------------------------------------------------------------
+
+
+class TestBatchSimilarity:
+    def test_sorted_descending(self):
+        query = np.array([1.0, 0.0, 0.0])
+        candidates = np.array([
+            [0.0, 1.0, 0.0],  # orthogonal
+            [1.0, 0.0, 0.0],  # identical
+            [0.5, 0.5, 0.0],  # partial
+        ])
+        results = batch_similarity(query, candidates)
+        scores = [s for _, s in results]
+        assert scores == sorted(scores, reverse=True)
+
+    def test_top_k(self):
+        query = np.array([1.0, 0.0])
+        candidates = np.array([
+            [1.0, 0.0],
+            [0.5, 0.5],
+            [0.0, 1.0],
+        ])
+        results = batch_similarity(query, candidates, top_k=2)
+        assert len(results) == 2
+
+    def test_top_k_none_returns_all(self):
+        query = np.array([1.0, 0.0])
+        candidates = np.array([
+            [1.0, 0.0],
+            [0.5, 0.5],
+            [0.0, 1.0],
+        ])
+        results = batch_similarity(query, candidates, top_k=None)
+        assert len(results) == 3
+
+    def test_returns_index_score_tuples(self):
+        query = np.array([1.0, 0.0])
+        candidates = np.array([[1.0, 0.0], [0.0, 1.0]])
+        results = batch_similarity(query, candidates)
+        for idx, score in results:
+            assert isinstance(idx, int)
+            assert isinstance(score, float)
+
+    def test_best_match_index(self):
+        query = np.array([1.0, 0.0])
+        candidates = np.array([
+            [0.0, 1.0],  # index 0: orthogonal
+            [1.0, 0.0],  # index 1: identical
+        ])
+        results = batch_similarity(query, candidates)
+        assert results[0][0] == 1  # best match is index 1
+
+    def test_dimension_mismatch_raises(self):
+        query = np.array([1.0, 0.0])
+        candidates = np.array([[1.0, 0.0, 0.0]])
+        with pytest.raises(ValueError, match="mismatch"):
+            batch_similarity(query, candidates)

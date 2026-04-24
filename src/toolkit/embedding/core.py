@@ -70,3 +70,53 @@ def embed(
         from_cache=0,
         computed=len(texts),
     )
+
+
+def similarity(a: np.ndarray, b: np.ndarray) -> float:
+    """Cosine similarity between two embedding vectors.
+
+    Args:
+        a: Single embedding vector (1-D).
+        b: Single embedding vector (1-D), same dimensionality as a.
+
+    Returns:
+        Cosine similarity in [-1, 1].
+
+    Raises:
+        ValueError: If a and b have different dimensions.
+    """
+    if a.shape != b.shape:
+        raise ValueError(
+            f"Dimension mismatch: a has shape {a.shape}, b has shape {b.shape}"
+        )
+    return float(np.dot(a, b))
+
+
+def batch_similarity(
+    query: np.ndarray,
+    candidates: np.ndarray,
+    top_k: int | None = None,
+) -> list[tuple[int, float]]:
+    """Rank candidates by cosine similarity to a query vector.
+
+    Args:
+        query: Single embedding vector (1-D).
+        candidates: Matrix of embeddings (2-D, each row is a vector).
+        top_k: Return only the top K results. None = return all.
+
+    Returns:
+        List of (index, similarity_score) tuples, sorted descending.
+
+    Raises:
+        ValueError: If query and candidate dimensions don't match.
+    """
+    if query.shape[0] != candidates.shape[1]:
+        raise ValueError(
+            f"Dimension mismatch: query has {query.shape[0]} dims, "
+            f"candidates have {candidates.shape[1]} dims"
+        )
+    scores = candidates @ query
+    indices = np.argsort(scores)[::-1]
+    if top_k is not None:
+        indices = indices[:top_k]
+    return [(int(i), float(scores[i])) for i in indices]

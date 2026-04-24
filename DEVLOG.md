@@ -1,5 +1,25 @@
 # Toolkit — Dev Log
 
+## 2026-04-24 — Embedding Phase 2 complete: Similarity functions
+
+**Module:** Embedding | **Phase:** 2 | **Regime:** Build | **Result:** 31 tests passing (12 new)
+
+### What was built
+- `similarity(a, b) -> float` — cosine similarity via dot product (assumes L2-normalized inputs)
+- `batch_similarity(query, candidates, top_k) -> list[tuple[int, float]]` — ranked similarity search via matrix multiply + argsort
+- Updated `__init__.py` exports and docstring
+- 12 new tests: TestSimilarity (6), TestBatchSimilarity (6)
+
+### Decisions made
+- Pure numpy implementation — no additional dependencies needed
+- `similarity()` uses `np.dot` directly since embed() guarantees L2 normalization
+- `batch_similarity()` uses `candidates @ query` for vectorized computation
+
+### Review findings (post-phase)
+- Clean phase. No correctness issues, no dead code, no architecture drift.
+
+---
+
 ## 2026-04-24 — Embedding Phase 1 complete: Types and core embed function
 
 **Module:** Embedding | **Phase:** 1 | **Regime:** Build | **Result:** All 19 tests passing
