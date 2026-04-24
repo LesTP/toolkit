@@ -3,7 +3,7 @@ phase: 1
 phase_title: "Types and core embed function"
 step: 6
 regime: build
-review_done: false
+review_done: true
 ---
 
 # Toolkit — Dev Plan
@@ -50,6 +50,7 @@ Consumers waiting: Year-in-Search (Phases 2–3), Phosphene (Seeding, Attention 
 | Date | What |
 |------|------|
 | 2026-04-24 | DEVPLAN.md created. Embedding Phase 1 plan approved. |
+| 2026-04-24 | Phase 1 complete. 19 tests passing. All exit criteria met. |
 
 ---
 
