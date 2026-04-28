@@ -11,10 +11,10 @@ Checked against `year-in-search/DESIGN.md`.
 | Embed HN titles (Phase 2) | ARCH_embedding: `embed(texts, config) → EmbeddingResult` | ✅ Direct fit. `all-MiniLM-L6-v2` is the default model. Caching matches YiS's "never re-embed" requirement. |
 | HDBSCAN clustering (Phase 3) | ARCH_clustering: `cluster(embeddings, config) → ClusterResult` | ✅ Direct fit. `ClusterStrategy.HDBSCAN` with configurable `min_cluster_size`, `min_samples`, `metric`. UMAP reduction via `reduce_dims` parameter. |
 | Optional UMAP before clustering | ARCH_clustering: `reduce_dims` parameter | ✅ Built into ClusterConfig. |
-| LLM-assisted labeling (Phase 5) | ARCH_llm_client: `complete(messages, config, tier) → LLMResponse` | ⚠️ ARCH contract not yet implemented — see LLM Client Gap Inventory below. YiS does not use llm_client in code today, so no runtime impact. |
+| LLM-assisted labeling (Phase 5) | ARCH_llm_client: `complete(messages, config, tier) → LLMResponse` | ✅ `complete()`, `Message`, `ModelTier` now implemented. YiS does not use llm_client in code today. |
 | Telegram delivery | Not needed | — YiS outputs image files, not messages. |
 
-**One gap found:** LLM-assisted labeling references the high-level `complete()` API which is not yet implemented (see LLM Client Gap Inventory). No runtime impact — YiS doesn't use llm_client in code today.
+**No gaps found.** The `complete()` API referenced in YiS design is now implemented. YiS doesn't use llm_client in code today, so no runtime impact either way.
 
 **One note:** YiS's DESIGN.md stores embeddings as `.npy` files. Toolkit's ARCH_embedding provides an in-memory `ndarray` result with optional disk cache. YiS can either use toolkit's cache mechanism or save the `result.vectors` ndarray to its own `.npy` file. No conflict — the toolkit returns the vectors, the consumer decides persistence.
 
@@ -26,7 +26,7 @@ Checked against `phosphene/ARCHITECTURE.md`.
 |---------------|---------------|--------|
 | Note similarity for link-density | ARCH_embedding: `embed` + `batch_similarity` | ✅ Embed notes, compute similarity against existing note embeddings. |
 | RAPTOR-style recursive clustering | ARCH_clustering: `ClusterStrategy.RAPTOR` with `raptor_summarizer` callback | ⚠️ Provisional. Interface defined but untested. Phosphene provides the summarizer (via llm_client). Resolve during distillation implementation. |
-| Attention filter LLM calls | ARCH_llm_client: `complete` with `ModelTier.QUALITY` | ⚠️ `complete()` and `ModelTier` not yet implemented — see LLM Client Gap Inventory below. Usable via low-level `create_provider().call()`. |
+| Attention filter LLM calls | ARCH_llm_client: `complete` with `ModelTier.QUALITY` | ✅ `complete()`, `Message`, `ModelTier`, and `TokenUsage` implemented. |
 | Multi-provider rotation | ARCH_llm_client: `complete_with_rotation` | ❌ Not implemented. See LLM Client Gap Inventory. |
 | Budget tracking | ARCH_llm_client: `get_budget_status` + `BudgetTracker` | ❌ Not implemented. See LLM Client Gap Inventory. |
 | Telegram messaging with feedback keyboards | ARCH_telegram_client: `send_message_with_keyboard` | ✅ InlineKeyboard with callback_data covers the like/discuss feedback pattern. |
@@ -109,41 +109,27 @@ Items are ordered by when they block Phosphene module implementation.
 
 ---
 
-**G-1: `Message` dataclass** — Priority: Blocks Seeding (Module 2)
+**G-1: `Message` dataclass** — ✅ Complete
 
-ARCH defines `Message(role: str, content: str)` as the input type for `complete()`. Not implemented.
-
-- **What to build:** Dataclass in `types.py`. ~5 lines.
-- **Consumer impact:** Additive. No existing consumer uses it.
+Implemented in `types.py`. Dataclass with `role: str` and `content: str`. Exported from `__init__.py`. 29 tests cover it.
 
 ---
 
-**G-2: `ModelTier` enum** — Priority: Blocks Seeding (Module 2)
+**G-2: `ModelTier` enum** — ✅ Complete
 
-ARCH defines `ModelTier(QUALITY, DEFAULT, COMMODITY)` for tier-based model selection. Not implemented. Phosphene's `ARCH_seeding.md` uses `ModelTier.QUALITY` in its `SeedingConfig`.
-
-- **What to build:** Enum in `types.py`. ~5 lines.
-- **Consumer impact:** Additive. TGBot hard-codes tier keys as strings (`config.models["quality"]`); the enum formalizes what TGBot already does informally.
+Implemented in `types.py` as `ModelTier(str, Enum)` with values `QUALITY`, `DEFAULT`, `COMMODITY`. The `str` mixin allows direct use as dict keys (`config.models[ModelTier.QUALITY]`). Exported from `__init__.py`.
 
 ---
 
-**G-3: Module-level `complete()` function** — Priority: Blocks Seeding (Module 2)
+**G-3: Module-level `complete()` function** — ✅ Complete
 
-ARCH defines `complete(messages: list[Message], config: LLMConfig, tier: ModelTier) → LLMResponse` as the primary high-level API. Not implemented. Consumers currently must: create a provider, resolve the tier to a model string manually, and split messages into system/user prompts.
-
-- **What to build:** Function in a new `core.py` (or added to `providers.py`). Resolves `tier.value` against `config.models`, splits `messages` into system/user for the underlying `.call()`, passes `config.temperature`. ~25 lines.
-- **Consumer impact:** Additive. Existing `create_provider().call()` path stays untouched.
-- **Design note:** The underlying `LLMProvider.call()` takes `(system_prompt, user_prompt)` separately, not `list[Message]`. The `complete()` wrapper handles the translation: extract the last `role="system"` message as `system_prompt`, concatenate `role="user"` messages as `user_prompt`. Multi-turn conversation (multiple user/assistant turns) would need `.call()` signature changes — defer until a consumer needs it.
+Implemented in `providers.py`. Resolves `ModelTier` to model string via `config.models[tier.value]`, splits `list[Message]` into system/user prompts, passes `config.temperature` and `config.max_tokens` through to the provider. Also added `temperature: float = 0.7` parameter to `LLMProvider.call()` ABC and all three provider implementations (Anthropic, OpenAI, Gemini). Exported from `__init__.py`.
 
 ---
 
-**G-4: `TokenUsage` dataclass** — Priority: Should-fix, before Seeding ideally
+**G-4: `TokenUsage` dataclass** — ✅ Complete
 
-ARCH defines `TokenUsage(input_tokens: int, output_tokens: int)` as a structured type. Implementation uses a plain `dict` for `LLMResponse.token_usage`.
-
-- **What to build:** Dataclass in `types.py`, update `LLMResponse.token_usage` type annotation, update the three providers' return statements. ~15 lines.
-- **Consumer impact:** **Breaking for TGBot.** TGBot's shim re-exports `LLMResponse`. Any code accessing `response.token_usage["input_tokens"]` must change to `response.token_usage.input_tokens`. TGBot's `summarize.py` does not appear to read `token_usage` directly, so the break may be limited to tests.
-- **Migration:** Update TGBot's `summarization/types.py` shim (one line re-export) and any direct dict access. Verify with TGBot's test suite.
+Implemented in `types.py`. `LLMResponse.token_usage` changed from `dict` to `TokenUsage(input_tokens: int, output_tokens: int)`. All three providers updated. TGBot migrated: `SummaryResult.token_usage` type updated, all dict-style access converted to attribute access, `demo_pipeline.py` `.get()` calls fixed. TGBot test suite passes (37/37).
 
 ---
 
@@ -206,14 +192,16 @@ ARCH lists "openrouter" as a supported provider. Not implemented. OpenRouter use
 
 | Phase | Items | Trigger | TGBot impact |
 |-------|-------|---------|-------------|
-| **Now** (before Phosphene Seeding) | G-1, G-2, G-3 | Blocks Module 2 | None (additive) |
-| **Now** (optional, recommended) | G-4 | Clean up before more consumers depend on the dict | Minor (dict→dataclass for `token_usage`) |
+| ~~**Now** (before Phosphene Seeding)~~ | ~~G-1, G-2, G-3~~ | ~~Blocks Module 2~~ | ~~None (additive)~~ |
+| ~~**Now** (optional, recommended)~~ | ~~G-4~~ | ~~Clean up before more consumers depend on the dict~~ | ~~Minor (dict→dataclass for `token_usage`)~~ |
 | **Before Module 10** | G-5, G-6, G-7, G-8, G-9, G-10 | Blocks Orchestrator rotation + budget | None (additive) |
+
+**G-1, G-2, G-3, G-4 are complete.** Seeding (Module 2) is unblocked.
 
 ### Also noted
 
-- **TGBot `demo_pipeline.py` is broken** — uses `LLMConfig(deep_dive_model=..., quick_hit_model=...)` kwargs that don't exist on the current `LLMConfig`. Predates the `models` dict API. Not a toolkit issue; fix in TGBot.
-- **`LLMProvider.call()` lacks `temperature` parameter** — ARCH says `call(model, messages, max_tokens, temperature)`, implementation is `call(model, system_prompt, user_prompt, max_tokens)`. The `complete()` wrapper (G-3) should pass `config.temperature` through, which means either adding `temperature` to `.call()` or having `complete()` set it at the SDK level. Adding it to `.call()` is cleaner but is a signature change on the ABC — TGBot's shim re-exports `LLMProvider`, so TGBot's tests need verification. Recommend adding `temperature` with a default value (`temperature: float = 0.7`) so existing call sites don't break.
+- **~~TGBot `demo_pipeline.py` is broken~~** — Fixed. Updated `.get()` dict calls to attribute access on `TokenUsage` dataclass.
+- **~~`LLMProvider.call()` lacks `temperature` parameter~~** — Fixed. Added `temperature: float = 0.7` to ABC and all three providers. `complete()` passes `config.temperature` through.
 
 ## TGBot Migration Notes
 

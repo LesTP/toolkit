@@ -8,7 +8,15 @@ factory function to create providers from config.
 
 from abc import ABC, abstractmethod
 
-from toolkit.llm_client.types import LLMAPIError, LLMConfig, LLMResponse, LLMResponseError
+from toolkit.llm_client.types import (
+    LLMAPIError,
+    LLMConfig,
+    LLMResponse,
+    LLMResponseError,
+    Message,
+    ModelTier,
+    TokenUsage,
+)
 
 
 class LLMProvider(ABC):
@@ -24,6 +32,7 @@ class LLMProvider(ABC):
         system_prompt: str,
         user_prompt: str,
         max_tokens: int,
+        temperature: float = 0.7,
     ) -> LLMResponse:
         """Call the LLM and return a structured response.
 
@@ -53,6 +62,7 @@ class AnthropicProvider(LLMProvider):
         system_prompt: str,
         user_prompt: str,
         max_tokens: int,
+        temperature: float = 0.7,
     ) -> LLMResponse:
         try:
             response = self._client.messages.create(
@@ -60,6 +70,7 @@ class AnthropicProvider(LLMProvider):
                 system=system_prompt,
                 messages=[{"role": "user", "content": user_prompt}],
                 max_tokens=max_tokens,
+                temperature=temperature,
             )
         except self._anthropic.RateLimitError as e:
             retry_after = None
@@ -90,10 +101,10 @@ class AnthropicProvider(LLMProvider):
             content=response.content[0].text,
             model=response.model,
             provider="anthropic",
-            token_usage={
-                "input_tokens": response.usage.input_tokens,
-                "output_tokens": response.usage.output_tokens,
-            },
+            token_usage=TokenUsage(
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+            ),
         )
 
 
@@ -117,6 +128,7 @@ class GeminiProvider(LLMProvider):
         system_prompt: str,
         user_prompt: str,
         max_tokens: int,
+        temperature: float = 0.7,
     ) -> LLMResponse:
         try:
             response = self._client.models.generate_content(
@@ -125,6 +137,7 @@ class GeminiProvider(LLMProvider):
                 config=self._genai.types.GenerateContentConfig(
                     system_instruction=system_prompt,
                     max_output_tokens=max_tokens,
+                    temperature=temperature,
                 ),
             )
         except self._genai.errors.ClientError as e:
@@ -142,10 +155,10 @@ class GeminiProvider(LLMProvider):
             content=response.text,
             model=model,
             provider="google",
-            token_usage={
-                "input_tokens": usage.prompt_token_count if usage else 0,
-                "output_tokens": usage.candidates_token_count if usage else 0,
-            },
+            token_usage=TokenUsage(
+                input_tokens=usage.prompt_token_count if usage else 0,
+                output_tokens=usage.candidates_token_count if usage else 0,
+            ),
         )
 
 
@@ -169,6 +182,7 @@ class OpenAIProvider(LLMProvider):
         system_prompt: str,
         user_prompt: str,
         max_tokens: int,
+        temperature: float = 0.7,
     ) -> LLMResponse:
         try:
             response = self._client.chat.completions.create(
@@ -178,6 +192,7 @@ class OpenAIProvider(LLMProvider):
                     {"role": "user", "content": user_prompt},
                 ],
                 max_tokens=max_tokens,
+                temperature=temperature,
             )
         except self._openai.RateLimitError as e:
             retry_after = None
@@ -211,10 +226,10 @@ class OpenAIProvider(LLMProvider):
             content=choice.message.content,
             model=response.model,
             provider="openai",
-            token_usage={
-                "input_tokens": usage.prompt_tokens if usage else 0,
-                "output_tokens": usage.completion_tokens if usage else 0,
-            },
+            token_usage=TokenUsage(
+                input_tokens=usage.prompt_tokens if usage else 0,
+                output_tokens=usage.completion_tokens if usage else 0,
+            ),
         )
 
 
@@ -236,4 +251,59 @@ def create_provider(config: LLMConfig) -> LLMProvider:
     raise ValueError(
         f"Unknown LLM provider: {config.provider!r}. "
         f"Supported providers: anthropic, openai, google"
+    )
+
+
+def complete(
+    messages: list[Message],
+    config: LLMConfig,
+    tier: ModelTier = ModelTier.DEFAULT,
+) -> LLMResponse:
+    """High-level LLM call: resolve tier, split messages, call provider.
+
+    Args:
+        messages: Conversation messages. System messages become the system
+            prompt; user messages become the user prompt.
+        config: Provider configuration with tier→model mapping.
+        tier: Quality tier to select the model.
+
+    Returns:
+        LLMResponse from the resolved provider and model.
+
+    Raises:
+        ValueError: If tier is not in config.models, or messages is empty.
+        LLMAPIError: API call failed.
+        LLMResponseError: API returned empty or unparseable response.
+    """
+    if not messages:
+        raise ValueError("messages must be non-empty")
+
+    tier_key = tier.value if isinstance(tier, ModelTier) else tier
+    if tier_key not in config.models:
+        available = ", ".join(sorted(config.models.keys()))
+        raise ValueError(
+            f"Tier {tier_key!r} not in config.models. "
+            f"Available tiers: {available}"
+        )
+
+    model = config.models[tier_key]
+
+    system_parts: list[str] = []
+    user_parts: list[str] = []
+    for msg in messages:
+        if msg.role == "system":
+            system_parts.append(msg.content)
+        else:
+            user_parts.append(msg.content)
+
+    system_prompt = "\n\n".join(system_parts)
+    user_prompt = "\n\n".join(user_parts) if user_parts else ""
+
+    provider = create_provider(config)
+    return provider.call(
+        model=model,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        max_tokens=config.max_tokens,
+        temperature=config.temperature,
     )

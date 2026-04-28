@@ -6,7 +6,34 @@ for multi-consumer, multi-provider use.
 """
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Optional
+
+
+# ---------------------------------------------------------------------------
+# Message
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Message:
+    """A single message in a conversation."""
+
+    role: str  # "system", "user", "assistant"
+    content: str
+
+
+# ---------------------------------------------------------------------------
+# Model tier
+# ---------------------------------------------------------------------------
+
+
+class ModelTier(str, Enum):
+    """Quality tier for model selection."""
+
+    QUALITY = "quality"  # best available (distillation, generation)
+    DEFAULT = "default"  # good general-purpose
+    COMMODITY = "commodity"  # cheapest adequate (parsing, scoring)
 
 
 # ---------------------------------------------------------------------------
@@ -53,16 +80,21 @@ class LLMConfig:
 
 
 @dataclass
-class LLMResponse:
-    """Structured response from an LLM provider call.
+class TokenUsage:
+    """Token counts from an LLM API call."""
 
-    Replaces the raw dict that TGBot's provider originally returned.
-    """
+    input_tokens: int
+    output_tokens: int
+
+
+@dataclass
+class LLMResponse:
+    """Structured response from an LLM provider call."""
 
     content: str
     model: str
     provider: str
-    token_usage: dict  # {"input_tokens": int, "output_tokens": int}
+    token_usage: TokenUsage
 
 
 # ---------------------------------------------------------------------------
