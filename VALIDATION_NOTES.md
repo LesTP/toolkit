@@ -11,10 +11,10 @@ Checked against `year-in-search/DESIGN.md`.
 | Embed HN titles (Phase 2) | ARCH_embedding: `embed(texts, config) → EmbeddingResult` | ✅ Direct fit. `all-MiniLM-L6-v2` is the default model. Caching matches YiS's "never re-embed" requirement. |
 | HDBSCAN clustering (Phase 3) | ARCH_clustering: `cluster(embeddings, config) → ClusterResult` | ✅ Direct fit. `ClusterStrategy.HDBSCAN` with configurable `min_cluster_size`, `min_samples`, `metric`. UMAP reduction via `reduce_dims` parameter. |
 | Optional UMAP before clustering | ARCH_clustering: `reduce_dims` parameter | ✅ Built into ClusterConfig. |
-| LLM-assisted labeling (Phase 5) | ARCH_llm_client: `complete(messages, config, tier) → LLMResponse` | ✅ Simple single-provider call. YiS uses `ModelTier.COMMODITY` for label cleanup. |
+| LLM-assisted labeling (Phase 5) | ARCH_llm_client: `complete(messages, config, tier) → LLMResponse` | ⚠️ ARCH contract not yet implemented — see LLM Client Gap Inventory below. YiS does not use llm_client in code today, so no runtime impact. |
 | Telegram delivery | Not needed | — YiS outputs image files, not messages. |
 
-**No gaps found.** Year-in-Search can consume embedding, clustering, and llm_client as-is.
+**One gap found:** LLM-assisted labeling references the high-level `complete()` API which is not yet implemented (see LLM Client Gap Inventory). No runtime impact — YiS doesn't use llm_client in code today.
 
 **One note:** YiS's DESIGN.md stores embeddings as `.npy` files. Toolkit's ARCH_embedding provides an in-memory `ndarray` result with optional disk cache. YiS can either use toolkit's cache mechanism or save the `result.vectors` ndarray to its own `.npy` file. No conflict — the toolkit returns the vectors, the consumer decides persistence.
 
@@ -26,9 +26,9 @@ Checked against `phosphene/ARCHITECTURE.md`.
 |---------------|---------------|--------|
 | Note similarity for link-density | ARCH_embedding: `embed` + `batch_similarity` | ✅ Embed notes, compute similarity against existing note embeddings. |
 | RAPTOR-style recursive clustering | ARCH_clustering: `ClusterStrategy.RAPTOR` with `raptor_summarizer` callback | ⚠️ Provisional. Interface defined but untested. Phosphene provides the summarizer (via llm_client). Resolve during distillation implementation. |
-| Attention filter LLM calls | ARCH_llm_client: `complete` with `ModelTier.QUALITY` | ✅ Direct fit. |
-| Multi-provider rotation | ARCH_llm_client: `complete_with_rotation` | ✅ Designed for Phosphene's subscription rotation strategy. |
-| Budget tracking | ARCH_llm_client: `get_budget_status` + `BudgetTracker` | ✅ Feeds into Phosphene's ambient stream (budget awareness). |
+| Attention filter LLM calls | ARCH_llm_client: `complete` with `ModelTier.QUALITY` | ⚠️ `complete()` and `ModelTier` not yet implemented — see LLM Client Gap Inventory below. Usable via low-level `create_provider().call()`. |
+| Multi-provider rotation | ARCH_llm_client: `complete_with_rotation` | ❌ Not implemented. See LLM Client Gap Inventory. |
+| Budget tracking | ARCH_llm_client: `get_budget_status` + `BudgetTracker` | ❌ Not implemented. See LLM Client Gap Inventory. |
 | Telegram messaging with feedback keyboards | ARCH_telegram_client: `send_message_with_keyboard` | ✅ InlineKeyboard with callback_data covers the like/discuss feedback pattern. |
 | Telegraph overflow for long synthesis | ARCH_telegram_client: `publish_telegraph` | ✅ Direct fit for weekly synthesis outputs. |
 | Discord messaging | Not in toolkit | ⚠️ Expected. Discord client stays in Phosphene until a second project needs it. Consistent with "second consumer" rule. |
@@ -76,6 +76,144 @@ Checked against `codexbot/ARCHITECTURE.md` and implementation source.
 - `JsonLineTransport` Protocol → `toolkit.json_rpc.JsonRpcTransport`
 - `encode_json_line()` → `toolkit.json_rpc.encode_json_line()`
 - Request-ID correlation / reader loop / notification routing → `toolkit.json_rpc.JsonRpcClient`
+
+## LLM Client: ARCH-to-Implementation Gap Inventory
+
+Audit date: 2026-04-28. Compared `ARCH_llm_client.md` (target contract) against `src/toolkit/llm_client/` (implementation). Checked actual usage in all known consumers (TGBot, Codexbot, Year-in-Search).
+
+### Current implementation surface
+
+The implementation provides a **low-level provider abstraction**:
+- `LLMConfig(provider, api_key, models, max_tokens, temperature)` — config dataclass
+- `LLMProvider.call(model, system_prompt, user_prompt, max_tokens) → LLMResponse` — abstract method
+- `AnthropicProvider`, `OpenAIProvider`, `GeminiProvider` — concrete providers
+- `create_provider(config) → LLMProvider` — factory
+- `LLMResponse(content, model, provider, token_usage: dict)` — response
+- `LLMAPIError`, `LLMResponseError` — errors
+
+The ARCH defines a **high-level convenience layer** on top of this. That layer is not implemented.
+
+### Active consumers
+
+| Consumer | Uses llm_client? | Call pattern |
+|----------|-----------------|-------------|
+| **TGBot** | Yes — via shim `summarization.client` | `create_provider(config).call(model=config.models["quality"], system_prompt=..., user_prompt=..., max_tokens=...)` |
+| **Codexbot** | No | Uses `toolkit.json_rpc` only; LLM calls delegated to Codex subprocess |
+| **Year-in-Search** | No | Pure data pipeline; LLM labeling described in design doc but not implemented |
+
+TGBot is the only active consumer. It uses the low-level `create_provider().call()` API directly.
+
+### Gap items (priority order)
+
+Items are ordered by when they block Phosphene module implementation.
+
+---
+
+**G-1: `Message` dataclass** — Priority: Blocks Seeding (Module 2)
+
+ARCH defines `Message(role: str, content: str)` as the input type for `complete()`. Not implemented.
+
+- **What to build:** Dataclass in `types.py`. ~5 lines.
+- **Consumer impact:** Additive. No existing consumer uses it.
+
+---
+
+**G-2: `ModelTier` enum** — Priority: Blocks Seeding (Module 2)
+
+ARCH defines `ModelTier(QUALITY, DEFAULT, COMMODITY)` for tier-based model selection. Not implemented. Phosphene's `ARCH_seeding.md` uses `ModelTier.QUALITY` in its `SeedingConfig`.
+
+- **What to build:** Enum in `types.py`. ~5 lines.
+- **Consumer impact:** Additive. TGBot hard-codes tier keys as strings (`config.models["quality"]`); the enum formalizes what TGBot already does informally.
+
+---
+
+**G-3: Module-level `complete()` function** — Priority: Blocks Seeding (Module 2)
+
+ARCH defines `complete(messages: list[Message], config: LLMConfig, tier: ModelTier) → LLMResponse` as the primary high-level API. Not implemented. Consumers currently must: create a provider, resolve the tier to a model string manually, and split messages into system/user prompts.
+
+- **What to build:** Function in a new `core.py` (or added to `providers.py`). Resolves `tier.value` against `config.models`, splits `messages` into system/user for the underlying `.call()`, passes `config.temperature`. ~25 lines.
+- **Consumer impact:** Additive. Existing `create_provider().call()` path stays untouched.
+- **Design note:** The underlying `LLMProvider.call()` takes `(system_prompt, user_prompt)` separately, not `list[Message]`. The `complete()` wrapper handles the translation: extract the last `role="system"` message as `system_prompt`, concatenate `role="user"` messages as `user_prompt`. Multi-turn conversation (multiple user/assistant turns) would need `.call()` signature changes — defer until a consumer needs it.
+
+---
+
+**G-4: `TokenUsage` dataclass** — Priority: Should-fix, before Seeding ideally
+
+ARCH defines `TokenUsage(input_tokens: int, output_tokens: int)` as a structured type. Implementation uses a plain `dict` for `LLMResponse.token_usage`.
+
+- **What to build:** Dataclass in `types.py`, update `LLMResponse.token_usage` type annotation, update the three providers' return statements. ~15 lines.
+- **Consumer impact:** **Breaking for TGBot.** TGBot's shim re-exports `LLMResponse`. Any code accessing `response.token_usage["input_tokens"]` must change to `response.token_usage.input_tokens`. TGBot's `summarize.py` does not appear to read `token_usage` directly, so the break may be limited to tests.
+- **Migration:** Update TGBot's `summarization/types.py` shim (one line re-export) and any direct dict access. Verify with TGBot's test suite.
+
+---
+
+**G-5: `LLMRateLimitError` subclass** — Priority: Nice-to-have, before Orchestrator (Module 10)
+
+ARCH defines `LLMRateLimitError(LLMAPIError)` with `retry_after_seconds`. Implementation folds rate-limit info into the generic `LLMAPIError(retry_after=...)`.
+
+- **What to build:** Subclass in `types.py`. Update providers to raise the subclass on rate-limit responses. ~10 lines.
+- **Consumer impact:** Non-breaking. `LLMRateLimitError` inherits from `LLMAPIError`, so existing `except LLMAPIError` catches still work. Consumers that want finer-grained handling can opt in.
+
+---
+
+**G-6: `LLMProviderError`** — Priority: Nice-to-have
+
+ARCH defines `LLMProviderError` for unknown provider names. Implementation raises `ValueError` from `create_provider()`.
+
+- **What to build:** Exception class in `types.py`, update `create_provider()` to raise it. ~5 lines.
+- **Consumer impact:** Technically breaking — code catching `ValueError` from `create_provider()` would need updating. In practice, no consumer catches this; provider names are always valid in config files.
+
+---
+
+**G-7: `complete_with_rotation()`** — Priority: Before Orchestrator (Module 10)
+
+ARCH defines `complete_with_rotation(messages, configs: list[LLMConfig], tier) → LLMResponse`. Not implemented. This is Phosphene's subscription rotation strategy — try providers in order, fall through on rate-limit or failure.
+
+- **What to build:** Function that loops over configs, calls `complete()`, catches `LLMAPIError`, tries the next. On full exhaustion, raises `LLMAllProvidersExhaustedError`. ~25 lines.
+- **Consumer impact:** Additive. Only Phosphene will use it.
+- **Depends on:** G-1, G-2, G-3 (uses `complete()`), G-8 (`LLMAllProvidersExhaustedError`).
+
+---
+
+**G-8: `LLMAllProvidersExhaustedError`** — Priority: With G-7
+
+ARCH defines this error for when all providers in a rotation list fail. Not implemented.
+
+- **What to build:** Exception class in `types.py`. ~5 lines.
+- **Consumer impact:** Additive.
+
+---
+
+**G-9: `BudgetTracker` / `BudgetStatus` / `get_budget_status()`** — Priority: Before Orchestrator (Module 10)
+
+ARCH defines a budget tracking interface: `BudgetTracker` (optional field on `LLMConfig`), `BudgetStatus(provider, tokens_used_today, estimated_tokens_remaining, rate_limit_resets_at, status)`, and `get_budget_status(config) → BudgetStatus`. Not implemented. Feeds into Phosphene's ambient stream for budget-aware activation scheduling.
+
+- **What to build:** Types + function + accumulation logic. ~50 lines. Consumer provides storage path; toolkit provides the interface.
+- **Consumer impact:** Additive. `BudgetTracker` is an optional field on `LLMConfig` (default `None`), so existing configs are unaffected.
+
+---
+
+**G-10: `OpenRouterProvider`** — Priority: Before Orchestrator (Module 10), possibly deferred further
+
+ARCH lists "openrouter" as a supported provider. Not implemented. OpenRouter uses an OpenAI-compatible API, so `OpenAIProvider` with a different `base_url` may suffice.
+
+- **What to build:** Either a new provider class or a `base_url` parameter on `OpenAIProvider`. ~30 lines.
+- **Consumer impact:** Additive. New provider branch in `create_provider()`.
+
+---
+
+### Implementation plan
+
+| Phase | Items | Trigger | TGBot impact |
+|-------|-------|---------|-------------|
+| **Now** (before Phosphene Seeding) | G-1, G-2, G-3 | Blocks Module 2 | None (additive) |
+| **Now** (optional, recommended) | G-4 | Clean up before more consumers depend on the dict | Minor (dict→dataclass for `token_usage`) |
+| **Before Module 10** | G-5, G-6, G-7, G-8, G-9, G-10 | Blocks Orchestrator rotation + budget | None (additive) |
+
+### Also noted
+
+- **TGBot `demo_pipeline.py` is broken** — uses `LLMConfig(deep_dive_model=..., quick_hit_model=...)` kwargs that don't exist on the current `LLMConfig`. Predates the `models` dict API. Not a toolkit issue; fix in TGBot.
+- **`LLMProvider.call()` lacks `temperature` parameter** — ARCH says `call(model, messages, max_tokens, temperature)`, implementation is `call(model, system_prompt, user_prompt, max_tokens)`. The `complete()` wrapper (G-3) should pass `config.temperature` through, which means either adding `temperature` to `.call()` or having `complete()` set it at the SDK level. Adding it to `.call()` is cleaner but is a signature change on the ABC — TGBot's shim re-exports `LLMProvider`, so TGBot's tests need verification. Recommend adding `temperature` with a default value (`temperature: float = 0.7`) so existing call sites don't break.
 
 ## TGBot Migration Notes
 
