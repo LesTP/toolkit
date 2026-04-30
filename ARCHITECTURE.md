@@ -36,7 +36,7 @@ Codexbot:        Telegram updates → Telegram Client (polling) → Command Rout
 | Order | Module | Rationale | Status |
 |-------|--------|-----------|--------|
 | 1 | Embedding | Leaf, simplest module. Year-in-Search needs it first. | Complete |
-| 2 | Clustering | Leaf, depends on Embedding outputs conceptually but not as a code dependency. Year-in-Search needs both. | Phase 2 complete |
+| 2 | Clustering | Leaf, depends on Embedding outputs conceptually but not as a code dependency. Year-in-Search needs both. | Complete |
 | 3 | LLM Client | Leaf, more complex (multi-provider, rate limits). Builds on TGBot's tested AnthropicProvider. | Complete |
 | 4 | Telegram Client | Leaf. Sending side working in TGBot, receiving side working in codexbot. Merge rather than new build. | Complete |
 | 5 | JSON-RPC Client | Leaf. Working in codexbot. Extract if second consumer materializes. | Complete |
@@ -73,5 +73,4 @@ Revisit if: A new model/strategy requires a fundamentally different interface (n
 
 - **Embedding cache interface** — the caching mechanism (in-memory, disk, or external) is not yet decided. The ARCH file specifies that caching exists and is keyed to model+input; the storage backend is provisional.
 - **LLM Client subscription rotation** — TGBot uses a single provider. Phosphene needs multi-provider rotation with budget tracking. The rotation logic is specified in the ARCH file but untested. Resolve during Phosphene implementation.
-- **Clustering RAPTOR strategy** — HDBSCAN is well-understood. The RAPTOR-style recursive strategy is specified as an interface but the implementation details (how to do recursive summarization within the clustering module vs. delegating to the consumer) need resolution. Resolve during Phosphene distillation implementation.
 - **JSON-RPC Client inclusion** — currently only codexbot consumes this pattern. Include in toolkit if a second consumer needs subprocess JSON-RPC, or extract early if the cleaner codexbot architecture justifies the cost.

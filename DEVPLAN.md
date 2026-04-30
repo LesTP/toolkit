@@ -2,9 +2,9 @@
 module: clustering
 phase: 3
 phase_title: "RAPTOR recursive clustering"
-step: 2
+step: 5
 regime: build
-review_done: false
+review_done: true
 ---
 
 # Toolkit — Dev Plan
@@ -18,42 +18,42 @@ Consumers waiting: Year-in-Search (Phase 3 — HDBSCAN flat clustering), Phosphe
 - **Two strategies:** HDBSCAN (flat, stateless) and RAPTOR (recursive, needs summarizer callback + re-embedding)
 - **Dependencies:** `hdbscan`, `umap-learn`, `numpy`
 - **RAPTOR needs two callbacks:** `raptor_summarizer` (texts → summary) and `raptor_embedder` (texts → ndarray) — both provided by consumer
+- **RAPTOR needs `texts` parameter:** `cluster(embeddings, config, texts=...)` — original texts for summarization
 - **Stateless** — no caching, each call is independent
 
 ## Current Status
 | Module | Status |
 |--------|--------|
 | Embedding | Complete (43 tests) |
-| Clustering | **In progress** — Phase 3 |
+| Clustering | **Complete** — Phase 3 done (48 tests) |
 | LLM Client | Complete |
 | Telegram Client | Complete |
 | JSON-RPC Client | Complete |
 
-## Phase 3: RAPTOR recursive clustering — PAUSED
+## Phase 3: RAPTOR recursive clustering — COMPLETE
 
-**Status:** Step 1 complete (raptor_embedder added to config + ARCH spec). Steps 2-5 paused — waiting for Phosphene to clarify RAPTOR requirements.
-**Reason:** RAPTOR is only needed by Phosphene. Year-in-Search needs only HDBSCAN + UMAP, which are done.
+**Status:** All steps complete. 48 tests passing (29 original + 19 new RAPTOR tests).
+**Contract change:** Added `texts: list[str] | None = None` parameter to `cluster()` — required for RAPTOR, ignored for HDBSCAN.
 
 **Regime:** Build
-**Scope:** Implement RAPTOR strategy (cluster → summarize → embed → recurse), populate ClusterResult.tree, validate RAPTOR callbacks.
-**Contract change:** `raptor_embedder: Callable | None = None` added to ClusterConfig (Step 1, done).
 
 ### Steps
 
-| Step | What | Test |
-|------|------|------|
-| 1 | Add `raptor_embedder` to ClusterConfig, update ARCH spec | Config change, spec updated |
-| 2 | Implement `_cluster_raptor()` — single recursion level | Synthetic data + mock callbacks → tree with depth 0 and 1 |
-| 3 | Multi-level recursion and depth limit | raptor_max_depth=2 → stops at depth 2, raptor_max_depth=1 → single level |
-| 4 | Validation: missing summarizer/embedder → error | ClusterStrategyError for missing callbacks |
-| 5 | Full test suite for RAPTOR | All tests passing |
+| Step | What | Status |
+|------|------|--------|
+| 1 | Add `raptor_embedder` to ClusterConfig, update ARCH spec | Done |
+| 2 | Implement `_cluster_raptor()` — single recursion level | Done |
+| 3 | Multi-level recursion and depth limit | Done |
+| 4 | Validation: missing summarizer/embedder/texts → error | Done |
+| 5 | Full test suite for RAPTOR | Done (19 new tests) |
 
-### Exit Criteria
-- `cluster(embeddings, ClusterConfig(strategy=RAPTOR, raptor_summarizer=fn, raptor_embedder=fn))` returns tree
-- Missing callbacks → ClusterStrategyError
-- Recursion stops at max_depth or single cluster
-- labels maps original items to leaf-layer clusters
-- Existing 29 tests unchanged
+### Exit Criteria — All Met
+- `cluster(embeddings, ClusterConfig(strategy=RAPTOR, raptor_summarizer=fn, raptor_embedder=fn), texts=texts)` returns tree ✓
+- Missing callbacks or texts → ClusterStrategyError ✓
+- Texts length mismatch → ClusterInputError ✓
+- Recursion stops at max_depth or single cluster ✓
+- labels maps original items to leaf-layer clusters ✓
+- Original 29 tests unchanged and passing ✓
 
 ## Clustering — Completed Phases
 - **Phase 1:** Types and HDBSCAN flat clustering — 24 tests. See DEVLOG 2026-04-24.
@@ -75,3 +75,4 @@ Consumers waiting: Year-in-Search (Phase 3 — HDBSCAN flat clustering), Phosphe
 | 2026-04-24 | Clustering Phase 1 complete | Phase completion protocol |
 | 2026-04-24 | Clustering Phase 2 complete | Phase completion protocol |
 | 2026-04-24 | Phase 3 plan approved (RAPTOR + raptor_embedder contract change) | Discuss-mode phase planning |
+| 2026-04-30 | Phase 3 complete — RAPTOR recursive clustering implemented | 19 new tests (48 total). Added `texts` param to `cluster()`. |

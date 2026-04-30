@@ -6,7 +6,7 @@ Group embeddings into semantically coherent clusters. Strategy-agnostic — cons
 ## Public API
 
 ### cluster
-- **Signature:** `cluster(embeddings: ndarray, config: ClusterConfig | None = None) -> ClusterResult`
+- **Signature:** `cluster(embeddings: ndarray, config: ClusterConfig | None = None, texts: list[str] | None = None) -> ClusterResult`
 - **Parameters:**
   - embeddings: ndarray — shape (n_items, embedding_dim). Must have at least 2 rows.
   - config: ClusterConfig | None — strategy and parameters. If None, uses HDBSCAN defaults.
@@ -22,10 +22,11 @@ Group embeddings into semantically coherent clusters. Strategy-agnostic — cons
         raptor_summarizer: Callable | None = None  # RAPTOR only: function to summarize a cluster
         raptor_embedder: Callable | None = None    # RAPTOR only: function to embed summaries into vectors
     ```
+  - texts: list[str] | None — original text items corresponding to each embedding row. Required for RAPTOR strategy (passed to raptor_summarizer). Ignored for HDBSCAN.
 - **Returns:** ClusterResult
 - **Errors:**
-  - `ClusterInputError` — fewer than 2 embeddings, or embedding_dim mismatch across rows
-  - `ClusterStrategyError` — unknown strategy or missing required parameter (e.g., RAPTOR without summarizer or embedder)
+  - `ClusterInputError` — fewer than 2 embeddings, embedding_dim mismatch across rows, or texts length doesn't match embeddings rows
+  - `ClusterStrategyError` — unknown strategy, or RAPTOR missing required callbacks (raptor_summarizer, raptor_embedder) or texts parameter
   - `ValueError` — min_cluster_size < 2 or min_samples < 1
 
 ### ClusterStrategy enum
@@ -93,7 +94,7 @@ clusters = cluster(result.vectors, ClusterConfig(
     raptor_max_depth=3,
     raptor_summarizer=summarize_cluster,
     raptor_embedder=embed_texts,
-))
+), texts=titles)
 for layer in clusters.tree:
     print(f"Depth {layer.depth}: {len(layer.cluster_ids)} clusters")
 ```

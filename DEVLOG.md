@@ -1,5 +1,32 @@
 # Toolkit — Dev Log
 
+## 2026-04-30 — Clustering Phase 3 complete: RAPTOR recursive clustering
+
+**Module:** Clustering | **Phase:** 3 | **Regime:** Build | **Result:** 48 tests passing (19 new)
+
+### What was built
+- `_cluster_raptor()` in core.py — cluster → summarize → embed → recurse, building a tree of ClusterLayer objects
+- Added `texts: list[str] | None = None` parameter to `cluster()` — required for RAPTOR (summarizer needs original texts), ignored for HDBSCAN
+- Validation: missing `raptor_summarizer`, `raptor_embedder`, or `texts` → ClusterStrategyError; texts length mismatch → ClusterInputError
+- Recursion stops at `raptor_max_depth` or when ≤1 cluster remains
+- Labels in ClusterResult come from the leaf level; tree spans depth 0 (leaf) to root
+
+### Decisions made
+- `texts` as a `cluster()` parameter rather than on ClusterConfig — data belongs in the function call, not configuration
+- Recursive HDBSCAN calls use `reduce_dims=None` (via `dataclasses.replace`) — summary embeddings may have fewer dims than the original `reduce_dims` value, which would crash UMAP
+- Summarizer called per-cluster (one cluster's texts at a time); embedder called per-batch (all summaries at once) — matches expected consumer patterns
+
+### Review findings (post-phase)
+- **Fixed:** `reduce_dims` inherited by recursive HDBSCAN calls — would crash if summary embeddings had fewer dims than `reduce_dims`. Fixed with `replace(config, reduce_dims=None)`.
+- **Fixed:** Dead variable `summary_cluster_ids` — populated but never read. Removed.
+- **Fixed:** Dead variable `current_embeddings` — reassigned in loop but never read after initial use. Removed.
+- **Fixed:** ARCH usage example missing `texts` parameter — would fail at runtime. Added `texts=titles`.
+
+### Contract Change
+- `cluster()` signature: added `texts: list[str] | None = None` as third parameter. ARCH_clustering.md updated (signature, errors, usage example).
+
+---
+
 ## 2026-04-24 — Clustering Phase 2 complete: UMAP dimensionality reduction
 
 **Module:** Clustering | **Phase:** 2 | **Regime:** Build | **Result:** 29 tests passing (5 new)
