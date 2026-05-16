@@ -1,5 +1,18 @@
 # Toolkit — Dev Log
 
+## 2026-05-16 — Cost Accountant Phase 1 Step 5: Reporting
+
+**Mode:** Build
+**Outcome:** Added ledger analytics and `session_total`.
+**Contract changes:** None.
+
+Implemented `session_total` as the in-memory cumulative total for the current
+accountant instance and `report()` over persisted ledger entries with optional
+timestamp filtering. Reports now include total call count, total spend,
+operation/model/date breakdowns, and anomaly strings for long calls and
+operations with repeated failures. Verified reporting behavior with direct
+ledger entries in a smoke test.
+
 ## 2026-05-16 — Cost Accountant Phase 1 Step 4: Budgeted completion
 
 **Mode:** Build

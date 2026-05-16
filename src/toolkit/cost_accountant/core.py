@@ -22,6 +22,7 @@ from toolkit.cost_accountant.types import (
     CallEstimate,
     CostBudget,
     CostEstimate,
+    CostReport,
     LedgerEntry,
     ModelPricing,
 )
@@ -203,6 +204,55 @@ class CostAccountant:
         )
         return response
 
+    @property
+    def session_total(self) -> float:
+        """Return spend accumulated by this accountant instance."""
+        return self._session_total
+
+    def report(self, since: Optional[datetime] = None) -> CostReport:
+        """Build a cost report from persisted ledger entries."""
+        entries = self._filter_entries(since)
+        by_operation: Dict[str, float] = {}
+        by_model: Dict[str, float] = {}
+        by_date: Dict[str, float] = {}
+        failure_counts: Dict[str, int] = {}
+        anomalies: List[str] = []
+        total_spend = 0.0
+
+        for entry in entries:
+            total_spend += entry.cost_usd
+            by_operation[entry.operation] = (
+                by_operation.get(entry.operation, 0.0) + entry.cost_usd
+            )
+            by_model[entry.model] = by_model.get(entry.model, 0.0) + entry.cost_usd
+            by_date[entry.timestamp[:10]] = (
+                by_date.get(entry.timestamp[:10], 0.0) + entry.cost_usd
+            )
+
+            if entry.duration_ms > 60_000:
+                anomalies.append(
+                    f"Long duration for {entry.operation}: {entry.duration_ms}ms"
+                )
+            if not entry.success:
+                failure_counts[entry.operation] = (
+                    failure_counts.get(entry.operation, 0) + 1
+                )
+
+        for operation, count in sorted(failure_counts.items()):
+            if count >= 3:
+                anomalies.append(
+                    f"Repeated failures for {operation}: {count} failed calls"
+                )
+
+        return CostReport(
+            total_calls=len(entries),
+            total_spend_usd=total_spend,
+            by_operation=by_operation,
+            by_model=by_model,
+            by_date=by_date,
+            anomalies=anomalies,
+        )
+
     def _resolve_model(self, config: LLMConfig, tier: ModelTier) -> str:
         tier_key = tier.value if isinstance(tier, ModelTier) else str(tier)
         if tier_key not in config.models:
@@ -291,3 +341,27 @@ class CostAccountant:
             or "usage limit" in message
             or "usage limits" in message
         )
+
+    def _filter_entries(self, since: Optional[datetime]) -> List[LedgerEntry]:
+        if since is None:
+            return list(self._ledger_entries)
+
+        threshold = since
+        if threshold.tzinfo is None:
+            threshold = threshold.replace(tzinfo=timezone.utc)
+
+        entries: List[LedgerEntry] = []
+        for entry in self._ledger_entries:
+            timestamp = self._parse_timestamp(entry.timestamp)
+            if timestamp is not None and timestamp >= threshold:
+                entries.append(entry)
+        return entries
+
+    def _parse_timestamp(self, timestamp: str) -> Optional[datetime]:
+        try:
+            parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed

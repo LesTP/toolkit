@@ -2,7 +2,7 @@
 phase: 1
 blocked: false
 state: execute
-steps_remaining: 1
+steps_remaining: 0
 ---
 
 # Toolkit — Dev Plan
@@ -49,7 +49,7 @@ Consumers waiting: Phosphene (prerequisite for all future LLM operations — API
 | 2 | Constructor + ledger I/O — `__init__()`, `_append_entry()`, `_load_ledger()` | Done |
 | 3 | Estimation — `estimate_cost()`, `estimate_batch()`, `_estimate_input_tokens()` | Done |
 | 4 | `complete()` — budget enforcement, llm_client wrapping, error detection, ledger write | Done |
-| 5 | `report()` + `session_total` — ledger analytics, anomaly detection | Pending |
+| 5 | `report()` + `session_total` — ledger analytics, anomaly detection | Done |
 | 6 | `__init__.py`, tests (≥20), pyproject.toml check | Pending |
 
 ### Exit Criteria
