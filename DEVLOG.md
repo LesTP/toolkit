@@ -1,5 +1,17 @@
 # Toolkit — Dev Log
 
+## 2026-05-16 — Cost Accountant Phase 1 Step 1: Types and errors
+
+**Mode:** Build
+**Outcome:** Added the cost accountant typed boundary and error hierarchy.
+**Contract changes:** None.
+
+Created `src/toolkit/cost_accountant/types.py` with all Phase 1 dataclasses and
+the built-in Anthropic pricing table from the architecture contract. Created
+`src/toolkit/cost_accountant/errors.py` with the budget, abort, and unknown
+model exception hierarchy. Used `typing.Optional`, `Dict`, and `List` so the
+new module remains compatible with the project Python 3.9 floor.
+
 ## 2026-04-30 — Clustering Phase 3 complete: RAPTOR recursive clustering
 
 **Module:** Clustering | **Phase:** 3 | **Regime:** Build | **Result:** 48 tests passing (19 new)
