@@ -1,34 +1,36 @@
 ---
-module: clustering
-phase: 3
-phase_title: "RAPTOR recursive clustering"
-step: 5
+module: cost_accountant
+phase: 1
+phase_title: "Core accountant + ledger"
+step: 0
 regime: build
-review_done: true
+review_done: false
 ---
 
 # Toolkit — Dev Plan
 
 ## Cold Start
-Active module: **Clustering** (second in implementation sequence).
-Load: ARCH_clustering.md for contract, PROJECT.md for constraints, ARCHITECTURE.md for context.
-Consumers waiting: Year-in-Search (Phase 3 — HDBSCAN flat clustering), Phosphene (Distillation — RAPTOR recursive clustering).
+Active module: **Cost Accountant** (sixth in implementation sequence).
+Load: ARCH_cost_accountant.md for contract, PROJECT.md for constraints, ARCHITECTURE.md for context.
+Consumers waiting: Phosphene (prerequisite for all future LLM operations — API spending cap hit, no LLM calls until accountant is in place).
 
 ### Key Context
-- **Two strategies:** HDBSCAN (flat, stateless) and RAPTOR (recursive, needs summarizer callback + re-embedding)
-- **Dependencies:** `hdbscan`, `umap-learn`, `numpy`
-- **RAPTOR needs two callbacks:** `raptor_summarizer` (texts → summary) and `raptor_embedder` (texts → ndarray) — both provided by consumer
-- **RAPTOR needs `texts` parameter:** `cluster(embeddings, config, texts=...)` — original texts for summarization
-- **Stateless** — no caching, each call is independent
+- **Wraps llm_client:** Only cross-module dependency in toolkit. Consumers replace `llm_client.complete()` with `accountant.complete(budget=...)`.
+- **Dependencies:** stdlib only (json, pathlib, datetime, dataclasses) + toolkit/llm_client
+- **Ledger format:** Append-only JSONL. One line per call. Stable schema.
+- **Budget enforcement:** per-call, per-operation, per-session. Three levels.
+- **Abort on hard errors:** spending cap and rate limit errors → immediate abort, no retry.
+- **Token estimation:** chars ÷ 4 heuristic (overestimates → conservative budgets).
 
 ## Current Status
 | Module | Status |
 |--------|--------|
 | Embedding | Complete (43 tests) |
-| Clustering | **Complete** — Phase 3 done (48 tests) |
+| Clustering | Complete (48 tests) |
 | LLM Client | Complete |
 | Telegram Client | Complete |
 | JSON-RPC Client | Complete |
+| Cost Accountant | **Not started** — ARCH spec written |
 
 ## Phase 3: RAPTOR recursive clustering — COMPLETE
 

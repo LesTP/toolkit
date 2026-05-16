@@ -16,6 +16,7 @@ The author's own projects. Currently: Phosphene (autonomous personality agent), 
 - Clustering: semantic grouping over embeddings with pluggable strategies (HDBSCAN, RAPTOR-style recursive)
 - LLM Client: provider-agnostic API abstraction with model tiers, rate-limit tracking, and subscription rotation
 - Telegram Client: Bot API messaging and receiving — send messages, long-poll for updates, edit messages, MarkdownV2 formatting, inline keyboards, message splitting, Telegraph overflow
+- Cost Accountant: cost tracking and budget enforcement for LLM API calls — wraps LLM Client with pre-call estimation, per-call/operation/session budget checking, append-only JSONL ledger, rate-limit and spending-cap abort, session reporting
 
 ### Candidate
 - JSON-RPC Client: async JSON-RPC 2.0 over stdio — request-response correlation, notification routing, subprocess transport (include when second consumer materializes)
@@ -27,7 +28,7 @@ The author's own projects. Currently: Phosphene (autonomous personality agent), 
 
 ### Exclusions
 - No application logic — toolkit modules are infrastructure, not features
-- No cross-dependencies between toolkit modules
+- No cross-dependencies between toolkit modules (except Cost Accountant → LLM Client, which is the only approved exception)
 - No framework or orchestration layer — consuming projects provide their own wiring
 - No speculative modules — second consumer required for inclusion
 
@@ -57,7 +58,7 @@ The author's own projects. Currently: Phosphene (autonomous personality agent), 
 - Additional platform clients (Discord, Slack) as projects need them
 
 ## Size Estimate
-Multi-module. Four independent modules, each a standalone package.
+Multi-module. Six independent modules (five leaf + one wrapper), each a standalone package.
 
 ---
 
