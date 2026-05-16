@@ -1,5 +1,22 @@
 # Toolkit — Dev Log
 
+## 2026-05-16 — Cost Accountant Phase 1 Step 6: Public API and tests
+
+**Mode:** Build
+**Outcome:** Added package exports and a 28-test cost accountant suite.
+**Contract changes:** None.
+
+Created `src/toolkit/cost_accountant/__init__.py` to expose the accountant,
+budget/estimate/report dataclasses, pricing table, and error hierarchy through
+the module's public API. Added `tests/cost_accountant/test_core.py` covering
+constructor/ledger behavior, cost estimation, batch estimates, budget
+enforcement, LLM wrapping, rate-limit and spending-cap aborts, report
+aggregation, anomaly detection, and session reset semantics. Confirmed
+`pyproject.toml` package discovery needs no change because setuptools discovers
+packages under `src`. `pytest` is not installed in this environment, so
+verification used `python3 -m compileall` plus an import/estimation/report smoke
+test.
+
 ## 2026-05-16 — Cost Accountant Phase 1 Step 5: Reporting
 
 **Mode:** Build
