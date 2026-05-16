@@ -1,5 +1,17 @@
 # Toolkit — Dev Log
 
+## 2026-05-16 — Cost Accountant Phase 1 Step 3: Cost estimation
+
+**Mode:** Build
+**Outcome:** Added single-call, batch, and message input token estimation.
+**Contract changes:** None.
+
+Implemented `estimate_cost()` with the model pricing table and
+`UnknownModelError`, `estimate_batch()` over labeled `input_chars` calls, and
+`_estimate_input_tokens()` using the contract's concatenated content `chars //
+4` heuristic. Verified expected cost arithmetic, batch token estimation, and
+unknown model handling with a direct `PYTHONPATH=src` smoke test.
+
 ## 2026-05-16 — Cost Accountant Phase 1 Step 2: Constructor and ledger I/O
 
 **Mode:** Build
