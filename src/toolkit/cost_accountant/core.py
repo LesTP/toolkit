@@ -1,20 +1,38 @@
 """Core cost accountant implementation."""
 
 import json
+import time
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from toolkit.cost_accountant.errors import UnknownModelError
+from toolkit.cost_accountant.errors import (
+    BudgetExceededError,
+    OperationBudgetError,
+    PerCallBudgetError,
+    RateLimitAbortError,
+    SessionBudgetError,
+    SpendingCapAbortError,
+    UnknownModelError,
+)
 from toolkit.cost_accountant.types import (
     DEFAULT_PRICING,
     BatchEstimate,
     CallEstimate,
+    CostBudget,
     CostEstimate,
     LedgerEntry,
     ModelPricing,
 )
-from toolkit.llm_client import Message
+from toolkit.llm_client import (
+    LLMAPIError,
+    LLMConfig,
+    LLMResponse,
+    Message,
+    ModelTier,
+    complete as llm_complete,
+)
 
 
 class CostAccountant:
@@ -110,3 +128,166 @@ class CostAccountant:
     def _estimate_input_tokens(self, messages: List[Message]) -> int:
         """Estimate input tokens from concatenated message content."""
         return sum(len(message.content) for message in messages) // 4
+
+    def complete(
+        self,
+        *,
+        messages: List[Message],
+        config: LLMConfig,
+        tier: ModelTier,
+        budget: CostBudget,
+    ) -> LLMResponse:
+        """Budget-check, execute, and ledger an LLM client completion."""
+        model = self._resolve_model(config, tier)
+        input_tokens = self._estimate_input_tokens(messages)
+        estimate = self.estimate_cost(
+            model=model,
+            input_tokens=input_tokens,
+            expected_output_tokens=config.max_tokens,
+        )
+        start = time.monotonic()
+
+        try:
+            self._check_budgets(budget, estimate)
+        except BudgetExceededError as error:
+            self._append_failure(
+                budget=budget,
+                model=model,
+                input_tokens=input_tokens,
+                duration_ms=self._duration_ms(start),
+                error=error,
+            )
+            raise
+
+        try:
+            response = llm_complete(messages=messages, config=config, tier=tier)
+        except Exception as error:
+            self._append_failure(
+                budget=budget,
+                model=model,
+                input_tokens=input_tokens,
+                duration_ms=self._duration_ms(start),
+                error=error,
+            )
+            if self._is_spending_cap_error(error) and budget.abort_on_spending_cap:
+                raise SpendingCapAbortError(str(error)) from error
+            if self._is_rate_limit_error(error) and budget.abort_on_rate_limit:
+                raise RateLimitAbortError(str(error)) from error
+            raise
+
+        output_tokens = response.token_usage.output_tokens
+        actual_cost = self.estimate_cost(
+            model=response.model,
+            input_tokens=response.token_usage.input_tokens,
+            expected_output_tokens=output_tokens,
+        ).total_usd
+        self._session_total += actual_cost
+        self._operation_totals[budget.operation_name] = (
+            self._operation_totals.get(budget.operation_name, 0.0) + actual_cost
+        )
+        self._append_entry(
+            LedgerEntry(
+                timestamp=self._timestamp(),
+                operation=budget.operation_name,
+                model=response.model,
+                input_tokens=response.token_usage.input_tokens,
+                output_tokens=output_tokens,
+                cost_usd=actual_cost,
+                cumulative_session_usd=self._session_total,
+                budget_name=budget.operation_name,
+                budget_remaining_usd=self._operation_remaining(budget),
+                duration_ms=self._duration_ms(start),
+                success=True,
+                error=None,
+            )
+        )
+        return response
+
+    def _resolve_model(self, config: LLMConfig, tier: ModelTier) -> str:
+        tier_key = tier.value if isinstance(tier, ModelTier) else str(tier)
+        if tier_key not in config.models:
+            available = ", ".join(sorted(config.models.keys()))
+            raise ValueError(
+                f"Tier {tier_key!r} not in config.models. "
+                f"Available tiers: {available}"
+            )
+        return config.models[tier_key]
+
+    def _check_budgets(self, budget: CostBudget, estimate: CostEstimate) -> None:
+        if estimate.total_usd > budget.per_call_max_usd:
+            raise PerCallBudgetError(
+                "Estimated call cost exceeds per-call budget",
+                estimate.total_usd,
+                budget.per_call_max_usd,
+            )
+
+        operation_total = self._operation_totals.get(budget.operation_name, 0.0)
+        if operation_total + estimate.total_usd > budget.operation_budget_usd:
+            raise OperationBudgetError(
+                "Estimated operation cost exceeds operation budget",
+                operation_total + estimate.total_usd,
+                budget.operation_budget_usd,
+            )
+
+        if self._session_total + estimate.total_usd > budget.session_budget_usd:
+            raise SessionBudgetError(
+                "Estimated session cost exceeds session budget",
+                self._session_total + estimate.total_usd,
+                budget.session_budget_usd,
+            )
+
+    def _append_failure(
+        self,
+        *,
+        budget: CostBudget,
+        model: str,
+        input_tokens: int,
+        duration_ms: int,
+        error: Exception,
+    ) -> None:
+        self._append_entry(
+            LedgerEntry(
+                timestamp=self._timestamp(),
+                operation=budget.operation_name,
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=0,
+                cost_usd=0.0,
+                cumulative_session_usd=self._session_total,
+                budget_name=budget.operation_name,
+                budget_remaining_usd=self._operation_remaining(budget),
+                duration_ms=duration_ms,
+                success=False,
+                error=str(error),
+            )
+        )
+
+    def _operation_remaining(self, budget: CostBudget) -> float:
+        return budget.operation_budget_usd - self._operation_totals.get(
+            budget.operation_name,
+            0.0,
+        )
+
+    def _duration_ms(self, start: float) -> int:
+        return int((time.monotonic() - start) * 1000)
+
+    def _timestamp(self) -> str:
+        return (
+            datetime.now(timezone.utc)
+            .replace(microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+
+    def _is_rate_limit_error(self, error: Exception) -> bool:
+        if isinstance(error, LLMAPIError) and error.status_code == 429:
+            return True
+        return "rate limit" in str(error).lower()
+
+    def _is_spending_cap_error(self, error: Exception) -> bool:
+        message = str(error).lower()
+        return (
+            "spending cap" in message
+            or "usage limit" in message
+            or "usage limits" in message
+        )

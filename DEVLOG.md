@@ -1,5 +1,19 @@
 # Toolkit — Dev Log
 
+## 2026-05-16 — Cost Accountant Phase 1 Step 4: Budgeted completion
+
+**Mode:** Build
+**Outcome:** Added budget-enforced LLM completion and ledger writes.
+**Contract changes:** None.
+
+Implemented keyword-only `complete()` with model tier resolution, pre-call
+per-call/operation/session budget checks, `llm_client.complete()` delegation,
+actual cost accounting from response token usage, and JSONL entries for
+successful and failed attempts. Added hard abort detection for `LLMAPIError`
+429/message rate limits and spending cap/usage limit messages. Smoke-tested
+success, budget rejection, rate-limit abort, and spending-cap abort with a
+mocked LLM call.
+
 ## 2026-05-16 — Cost Accountant Phase 1 Step 3: Cost estimation
 
 **Mode:** Build
