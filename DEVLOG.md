@@ -1,5 +1,17 @@
 # Toolkit — Dev Log
 
+## 2026-05-16 — Cost Accountant Phase 1 Step 2: Constructor and ledger I/O
+
+**Mode:** Build
+**Outcome:** Added the `CostAccountant` constructor and JSONL ledger helpers.
+**Contract changes:** None.
+
+Created `src/toolkit/cost_accountant/core.py` with session-local totals,
+operation-local totals, pricing initialization, ledger parent creation, and
+ledger file creation. Added `_append_entry()` to persist compact JSONL rows and
+`_load_ledger()` to hydrate historical entries for future reporting without
+using historical totals for budget enforcement.
+
 ## 2026-05-16 — Cost Accountant Phase 1 Step 1: Types and errors
 
 **Mode:** Build
