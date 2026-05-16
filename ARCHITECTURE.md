@@ -9,6 +9,7 @@
 | LLM Client | Provider-agnostic LLM API. Model tiers, rate-limit tracking, multi-provider rotation. | none (leaf) | Adapted from TGBot summarization/client.py |
 | Telegram Client | Telegram Bot API: send messages, receive updates (long polling), edit messages, MarkdownV2 formatting, inline keyboards, message splitting, Telegraph overflow. | none (leaf) | Sending adapted from TGBot delivery/; receiving adapted from codexbot telegram_adapter |
 | JSON-RPC Client | Async JSON-RPC 2.0 client over stdio. Request-response correlation, notification routing, subprocess transport. | none (leaf) | Extracted from codexbot codex_client.py |
+| Cost Accountant | Cost tracking and budget enforcement for LLM API calls. Wraps llm_client with pre-call estimation, budget checking, append-only ledger, rate-limit abort, and reporting. | LLM Client | New — motivated by Phosphene cost incidents |
 
 ## Data Flow
 
@@ -40,10 +41,11 @@ Codexbot:        Telegram updates → Telegram Client (polling) → Command Rout
 | 3 | LLM Client | Leaf, more complex (multi-provider, rate limits). Builds on TGBot's tested AnthropicProvider. | Complete |
 | 4 | Telegram Client | Leaf. Sending side working in TGBot, receiving side working in codexbot. Merge rather than new build. | Complete |
 | 5 | JSON-RPC Client | Leaf. Working in codexbot. Extract if second consumer materializes. | Complete |
+| 6 | Cost Accountant | Wraps LLM Client. Budget enforcement, cost ledger, rate-limit abort. Prerequisite for Phosphene LLM resume. | Not started |
 
 ## Coupling Notes
 
-- **No cross-dependencies.** Toolkit modules never import from each other. Embedding does not depend on Clustering. LLM Client does not depend on Telegram Client. Each is independently installable.
+- **No cross-dependencies** (with one exception). Toolkit modules never import from each other — except Cost Accountant, which wraps LLM Client. This is the only cross-module dependency. It's one-way, optional, and consumers that don't need cost tracking use LLM Client directly.
 - **Shared types are local.** Each module defines its own types.py. No shared types package across toolkit modules.
 - **Consumer coupling is one-way.** Application projects import from toolkit. Toolkit never imports from application projects.
 - Adding a new module is purely additive — no existing modules or consumers are affected.
