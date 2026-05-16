@@ -1,10 +1,7 @@
 ---
-module: cost_accountant
 phase: 1
-phase_title: "Core accountant + ledger"
-step: 0
-regime: build
-review_done: false
+blocked: false
+state: execute
 ---
 
 # Toolkit — Dev Plan
@@ -30,7 +27,40 @@ Consumers waiting: Phosphene (prerequisite for all future LLM operations — API
 | LLM Client | Complete |
 | Telegram Client | Complete |
 | JSON-RPC Client | Complete |
-| Cost Accountant | **Not started** — ARCH spec written |
+| Cost Accountant | **In progress** — Phase 1 active |
+
+## Phase 1: Cost Accountant — Core Implementation
+
+**Status:** In progress.
+**Regime:** Build
+
+### Implementation Notes
+- `LLMRateLimitError` does not exist in llm_client — rate limit errors surface as `LLMAPIError` (status_code 429 or message match). Detect by checking `LLMAPIError.status_code == 429` or message contains "rate limit".
+- Operation budgets are in-memory per session (reset on construction), not loaded from ledger.
+- Session total also in-memory (reset on construction). `report()` reads ledger for historical data.
+- Token estimation: `len(text) // 4` heuristic applied to concatenated message content.
+
+### Steps
+
+| Step | What | Status |
+|------|------|--------|
+| 1 | `types.py` + `errors.py` — all dataclasses, DEFAULT_PRICING, error hierarchy | Pending |
+| 2 | Constructor + ledger I/O — `__init__()`, `_append_entry()`, `_load_ledger()` | Pending |
+| 3 | Estimation — `estimate_cost()`, `estimate_batch()`, `_estimate_input_tokens()` | Pending |
+| 4 | `complete()` — budget enforcement, llm_client wrapping, error detection, ledger write | Pending |
+| 5 | `report()` + `session_total` — ledger analytics, anomaly detection | Pending |
+| 6 | `__init__.py`, tests (≥20), pyproject.toml check | Pending |
+
+### Exit Criteria
+- `CostAccountant(ledger_path)` creates/opens JSONL ledger
+- `estimate_cost(model, tokens)` returns `CostEstimate`; raises `UnknownModelError` for unknown model
+- `estimate_batch(model, calls)` returns `BatchEstimate` with per-call breakdown
+- `complete(messages, config, tier, budget)` enforces per-call, operation, and session budgets; raises `BudgetExceededError` subtypes when exceeded
+- `complete()` aborts on rate limit / spending cap with `RateLimitAbortError` / `SpendingCapAbortError`
+- `complete()` appends `LedgerEntry` to JSONL on every call (success or failure)
+- `report()` reads ledger and returns breakdown by operation, model, date; includes anomalies
+- `session_total` tracks in-memory cumulative since construction
+- ≥20 tests passing
 
 ## Phase 3: RAPTOR recursive clustering — COMPLETE
 
@@ -78,3 +108,5 @@ Consumers waiting: Phosphene (prerequisite for all future LLM operations — API
 | 2026-04-24 | Clustering Phase 2 complete | Phase completion protocol |
 | 2026-04-24 | Phase 3 plan approved (RAPTOR + raptor_embedder contract change) | Discuss-mode phase planning |
 | 2026-04-30 | Phase 3 complete — RAPTOR recursive clustering implemented | 19 new tests (48 total). Added `texts` param to `cluster()`. |
+| 2026-05-16 | Migrated frontmatter to e2e template schema (`phase`, `blocked`, `state`) | Wired toolkit into autonomous loop runner; active module = Cost Accountant, state = plan |
+| 2026-05-16 | Phase 1 plan: 6-step cost_accountant implementation | state → execute; noted LLMRateLimitError gap (use LLMAPIError + status_code check) |
