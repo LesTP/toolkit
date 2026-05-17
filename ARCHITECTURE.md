@@ -41,7 +41,7 @@ Codexbot:        Telegram updates → Telegram Client (polling) → Command Rout
 | 3 | LLM Client | Leaf, more complex (multi-provider, rate limits). Builds on TGBot's tested AnthropicProvider. | Complete |
 | 4 | Telegram Client | Leaf. Sending side working in TGBot, receiving side working in codexbot. Merge rather than new build. | Complete |
 | 5 | JSON-RPC Client | Leaf. Working in codexbot. Extract if second consumer materializes. | Complete |
-| 6 | Cost Accountant | Wraps LLM Client. Budget enforcement, cost ledger, rate-limit abort. Prerequisite for Phosphene LLM resume. | Not started |
+| 6 | Cost Accountant | Wraps LLM Client. Budget enforcement, cost ledger, rate-limit abort. Prerequisite for Phosphene LLM resume. | Complete |
 
 ## Coupling Notes
 
