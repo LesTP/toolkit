@@ -1,7 +1,8 @@
 ---
 phase: 1
 blocked: false
-state: review
+state: close
+steps_remaining: 0
 ---
 
 # Toolkit — Dev Plan
@@ -10,6 +11,10 @@ state: review
 Active module: **Cost Accountant** (sixth in implementation sequence).
 Load: ARCH_cost_accountant.md for contract, PROJECT.md for constraints, ARCHITECTURE.md for context.
 Consumers waiting: Phosphene (prerequisite for all future LLM operations — API spending cap hit, no LLM calls until accountant is in place).
+
+### Gotchas
+- **Running tests:** Use `/home/claude/toolkit-venv/bin/python3 -m pytest` (not bare `pytest` or `python3 -m pytest` — those hit system Python which has no pytest). The venv is inside the container at `/home/claude/toolkit-venv/`.
+- **PYTHONPATH:** When running tests, set `PYTHONPATH=/home/claude/workspace/toolkit/src` so pytest can find the `toolkit` package, or use `cd /home/claude/workspace/toolkit && /home/claude/toolkit-venv/bin/python3 -m pytest`.
 
 ### Key Context
 - **Wraps llm_client:** Only cross-module dependency in toolkit. Consumers replace `llm_client.complete()` with `accountant.complete(budget=...)`.

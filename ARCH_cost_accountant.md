@@ -110,7 +110,7 @@ DEFAULT_PRICING = {
 6. **Check session budget:** if session cumulative + estimated > `budget.session_budget_usd` → raise `BudgetExceededError`
 7. Call `llm_client.complete(messages, config, tier)`
 8. On success: compute actual cost from `response.token_usage`, append to ledger, update cumulative totals
-9. On `LLMRateLimitError`: append failure to ledger. If `abort_on_rate_limit` → raise `RateLimitAbortError`. Else re-raise.
+9. On `LLMAPIError` with status code 429, or an error message containing "rate limit": append failure to ledger. If `abort_on_rate_limit` → raise `RateLimitAbortError`. Else re-raise.
 10. On error containing "usage limits" or "spending cap": append failure to ledger. If `abort_on_spending_cap` → raise `SpendingCapAbortError`. Else re-raise.
 11. On other errors: append failure to ledger, re-raise.
 
@@ -184,7 +184,7 @@ The ledger is the source of truth for all cost reporting. It survives process re
 
 ## Dependencies
 
-- `toolkit/llm_client` — the accountant wraps `complete()`. It imports `LLMConfig`, `ModelTier`, `Message`, `LLMResponse`, `LLMRateLimitError`.
+- `toolkit/llm_client` — the accountant wraps `complete()`. It imports `LLMConfig`, `ModelTier`, `Message`, `LLMResponse`, and `LLMAPIError` for rate-limit detection.
 - Standard library only beyond that (json, pathlib, datetime, dataclasses).
 
 ## Coupling Notes

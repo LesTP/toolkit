@@ -1,5 +1,20 @@
 # Toolkit — Dev Log
 
+## 2026-05-17 — Cost Accountant Phase 1 Review
+
+**Mode:** Review
+**Outcome:** Phase review complete; applied documentation drift fix.
+**Contract changes:** ARCH_cost_accountant.md corrected to document `LLMAPIError` rate-limit detection instead of nonexistent `LLMRateLimitError`.
+
+Reviewed the Phase 1 implementation against the cost accountant architecture:
+typed boundaries, ledger I/O, cost estimation, `complete()` budget enforcement,
+abort handling, reporting, public exports, and tests. No code-level must-fix or
+should-fix issues were found. Corrected the architecture dependency/error text
+so cold-start workers see the implemented `LLMAPIError` 429/message-match
+contract. Verified with
+`PYTHONPATH=/home/claude/workspace/toolkit/src /home/claude/toolkit-venv/bin/python3 -m pytest tests/cost_accountant/`
+(`28 passed`).
+
 ## 2026-05-16 — Cost Accountant Phase 1 Step 6: Public API and tests
 
 **Mode:** Build
