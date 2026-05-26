@@ -17,87 +17,115 @@ You are a **stateless worker** in an autonomous development loop.
 
 ## 2. Cold Start — State Detection
 
-Each iteration begins from scratch. Read DEVPLAN frontmatter:
+Each invocation begins from scratch. Read three inputs:
 
-1. **Check `blocked`** — if `true`, exit ESCALATE immediately. The work is gated.
-2. **Read `state`** — this determines your action for this invocation.
-3. **Set `steps_remaining` in DEVPLAN frontmatter.** If the prompt specifies `STEPS_REMAINING: N`, write `steps_remaining: N`. If not, write `steps_remaining: 1`. Always set this on cold start — a previous batch may have left it at 0.
-4. **If the prompt specifies `ITERATION_JSONL: <path>`**, note the path — used for the per-step turn health check (§4).
-
+**From DEVPLAN frontmatter:**
 ```yaml
 ---
 phase: 3b
 blocked: false
 state: execute
-steps_remaining: 5
+steps_remaining: 0
 ---
 ```
+
+**From the prompt (injected by the runner):**
+- `STEPS_REMAINING: N` — max actions this invocation (default 1)
+- `STOP_BEFORE_REVIEW: true|false` — stop before entering review state (default false)
+- `ITERATION_JSONL: <path>` — log path for turn health check (codex only)
+
+**Cold start sequence:**
+1. Read `blocked` — if `true`, EXIT 1 immediately.
+2. Read `state` — determines the first action.
+3. Write `steps_remaining: STEPS_REMAINING` to DEVPLAN frontmatter (overwrite any stale value).
 
 No external state, no session memory, no inter-iteration side channels.
 
 ---
 
-## 3. The Four States
+## 3. Transition Table
 
-Execute the action matching `state`:
+After performing an action, the next state is determined by lookup — not judgment.
 
-| State | Action | On success | Exit |
-|-------|--------|------------|------|
-| `plan` | Break the next phase into steps. Update DEVPLAN with step breakdown. | Set `state: execute` | CONTINUE |
-| `execute` | Do the next incomplete step. Run tests. Update DEVLOG. | If last step: set `state: review`. Otherwise: keep `state: execute`. | CONTINUE |
-| `review` | Review phase output against the architecture contract. Apply must-fix and should-fix items. | Set `state: close` | CONTINUE |
-| `close` | Doc cleanup: DEVPLAN summary, DEVLOG entry, ARCHITECTURE.md status, contract propagation, gotchas promotion. Set `blocked: true`. | — | ESCALATE |
+```
+NEXT[state]:
+  plan    → execute
+  execute → review   IF no unchecked steps remain in DEVPLAN
+            execute  OTHERWISE
+  review  → close
+  close   → ∅       (terminal — close always exits)
+```
+
+"No unchecked steps remain" is the ONE judgment call in this table.
+The worker reads the step checklist in DEVPLAN after performing the action.
+Everything else is a counter, a boolean, or a table lookup.
+
+| State | What the action does |
+|-------|---------------------|
+| `plan` | Break the next phase into steps. Update DEVPLAN with step breakdown. |
+| `execute` | Do the next incomplete step. Run tests. Update DEVLOG. Commit. |
+| `review` | Review phase output against the architecture contract. Apply must-fix and should-fix items. |
+| `close` | Doc cleanup: DEVPLAN summary, DEVLOG entry, ARCHITECTURE.md status, contract propagation, gotchas promotion. |
 
 The `/close` bot command (or human) clears the gate: sets `blocked: false` and `state: plan`.
 
 ---
 
-## 4. Step Budget
+## 4. Main Loop
 
-Each invocation has a **step budget** that controls how many actions to perform
-before emitting the exit signal.
+Follow this pseudocode literally. Do not interpret — execute.
 
-- When `steps_remaining` is absent from DEVPLAN frontmatter: **budget is 1**
-  (one action, then exit — the default).
-- When `steps_remaining` is present: that is the budget.
+```
+steps_done = 0
 
-**After each action:**
+LOOP:
+  perform_action(state)
+  steps_done += 1
+  commit changes, update DEVLOG and DEVPLAN
 
-1. Commit changes, update DEVLOG and DEVPLAN
-2. Decrement `steps_remaining` in DEVPLAN frontmatter
-3. Check stop conditions:
-   - `steps_remaining` reached 0 → **stop**
-   - State is now `close` → **stop**
-   - Any escalation condition (§6) → **stop**
-   - Turn health check failed (see below) → **stop** with ESCALATE
-4. If no stop condition: read the updated `state` from DEVPLAN and continue
-   to the next action
+  next = NEXT[state]                                  # §3 transition table
 
-**Allowed transitions within a budget:**
-- `plan` → `execute` → ... → `review` → `close` (each counts as 1 action toward the step budget)
+  # ---- EXIT CHECK ---- first match wins, top to bottom ----
 
-**Always stops at:**
-- `close` (always ESCALATE — phase boundary)
-- Any escalation condition
+  1. if state == "close"                               → set blocked=true, EXIT 0
+  2. if STOP_BEFORE_REVIEW and next == "review"        → EXIT 0  (keep state as-is)
+  3. if steps_done == STEPS_REMAINING                       → set state=next, EXIT 0
+  4. if ITERATION_JSONL and turns > steps_done × 50    → EXIT 2  "health check"
 
-When budget is 1 (the default), this behaves identically to one-action-per-invocation.
+  # ---- NO EXIT ---- continue to next action
+  state = next
+  write DEVPLAN { state, steps_remaining: STEPS_REMAINING - steps_done }
+  goto LOOP
+```
 
-### Turn Health Check
+### Exit check — why this order
 
-If `ITERATION_JSONL` was provided in the prompt, the worker checks the turn
-count after each step by running:
+1. **Close is terminal.** Close sets `blocked=true` and exits regardless of
+   remaining budget. The phase gate is structural.
+2. **Stop-at boundary.** Fires even if budget remains. Keeps `state` as-is
+   (execute) so the next invocation starts at the review boundary on a
+   different backend.
+3. **Budget exhausted.** Writes `state=next` so the next invocation picks
+   up at the right point.
+4. **Health check.** Safety circuit breaker. Only fires if the worker is
+   spiraling (>50 turns per step). Normal steps use 20–45 turns.
+
+### Turn health check detail
+
+If `ITERATION_JSONL` was provided, check the turn count after each step:
 
 ```bash
 grep -c '"item.completed"' "$ITERATION_JSONL"
 ```
 
-If the total turns so far exceed `steps_completed × 50` (where `steps_completed`
-is the number of actions performed so far in this invocation), the current step
-consumed anomalously many turns. This indicates the worker is spiraling.
-**ESCALATE** with reason explaining which step was expensive.
+If total turns exceed `steps_done × 50`, EXIT 2 with a reason explaining
+which step was expensive.
 
-This is a safety circuit breaker, not the budgeting mechanism. Normal steps
-use 20–45 turns; the 50-per-step ceiling is generous.
+### Budget of 1
+
+When `STEPS_REMAINING` is 1 (the default), the loop executes exactly one action and
+exits via rule 3. This is identical to the original one-action-per-invocation
+model.
 
 ---
 
@@ -116,16 +144,17 @@ Read docs **immediately before editing** — stale reads cause lost updates.
 
 ## 6. Escalation Conditions
 
-Exit with ESCALATE if any of:
+These are judgment calls made DURING `perform_action()`, not part of the
+mechanical exit check in §4. When any fires, EXIT 2 with a reason.
 
-- `blocked` is `true`
+- `blocked` is `true` (EXIT 1 on cold start — §2)
 - 3 consecutive failures on the same problem
 - Work regime shifts to Refine or Explore
 - Scope needs to expand beyond the defined phase
 - Contract change would affect other modules
 - All modules complete
 - Unclear or contradictory spec
-- Turn health check exceeded (§4)
+- Turn health check exceeded (§4, rule 4)
 
 ---
 
@@ -134,14 +163,21 @@ Exit with ESCALATE if any of:
 The **final lines** of every invocation must be:
 
 ```
-LOOP_SIGNAL: CONTINUE | ESCALATE
+EXIT: 0 | 1 | 2
 REASON: <one-line summary>
 ACTION_TYPE: PLAN | EXECUTE | REVIEW | CLOSE
-ACTION_ID: <phase.step — e.g., 3b.2>
+ACTION_ID: <phase.step — e.g., 10.3>
 STEPS_COMPLETED: <number of actions performed in this invocation>
 ```
 
-The loop runner parses these to decide whether to re-invoke or stop.
+| Code | Meaning |
+|------|---------|
+| 0 | Normal completion — runner reads DEVPLAN to decide next dispatch |
+| 1 | Blocked on entry — nothing to do |
+| 2 | Error — judgment-based escalation (§6) or health check |
+
+ACTION_TYPE, ACTION_ID, and STEPS_COMPLETED are telemetry for `summary.log`.
+The runner uses exit code + DEVPLAN state for control decisions, not these fields.
 
 ---
 
@@ -150,9 +186,9 @@ The loop runner parses these to decide whether to re-invoke or stop.
 These rules supplement GOVERNANCE.md for autonomous execution:
 
 - **Commits:** Commit per step without waiting for human approval. Log decisions to DECISIONS.md for asynchronous audit.
-- **Scope expansion:** Beyond the defined phase is a hard stop — ESCALATE.
-- **Contract changes affecting other modules:** Hard stop — flag in DECISIONS.md, ESCALATE.
-- **Phase completion:** Always ESCALATE. Human audits before next phase begins.
+- **Scope expansion:** Beyond the defined phase is a hard stop — EXIT 2.
+- **Contract changes affecting other modules:** Hard stop — flag in DECISIONS.md, EXIT 2.
+- **Phase completion:** Close always exits (EXIT 0, blocked=true). Human audits before next phase begins.
 
 ---
 

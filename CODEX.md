@@ -117,7 +117,7 @@ Codex. Perform **exactly one** per iteration unless `steps_remaining` > 0
 End every iteration with exactly these five lines — no additional text after:
 
 ```
-LOOP_SIGNAL: CONTINUE | ESCALATE
+EXIT: 0 | 1 | 2
 REASON: <one-line summary>
 ACTION_TYPE: PLAN | EXECUTE | REVIEW | CLOSE
 ACTION_ID: <phase.step>

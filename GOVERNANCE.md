@@ -19,6 +19,8 @@ Work falls along a spectrum based on **evaluability** — who can assess whether
 
 Examples: data models, algorithms, parsers, API contracts, integration wiring, build config.
 
+When a module's tests use fakes or stubs for real external dependencies, at least one probe exercising the real interface must pass before phase-complete is accepted. Fakes that have never been checked against the real implementation encode assumptions, not contracts. See `/dependency-probe`.
+
 **Refine (human-evaluable):** Correctness requires human perception or subjective judgment.
 - Goals and constraints specified upfront; steps emerge iteratively
 - Small increments shown to human frequently
@@ -135,12 +137,13 @@ Organize findings as:
 #### Phase Completion
 
 1. Run phase-level tests (Build) or human sign-off (Refine)
-2. Apply remaining review fixes
-3. **DEVLOG learning review** — scan this phase's DEVLOG entries for trial-and-error patterns. Extract prescriptive one-liners and promote to DEVPLAN Gotchas.
-4. **Contract scan** — scan DEVLOG for Contract Changes markers. Propagate to upstream documents.
-5. **DEVPLAN cleanup** — reduce completed phase to a one-line summary with DEVLOG reference. Archive the previous phase's DEVLOG entries to `DEVLOG_archive.md`.
-6. Update module Status in ARCHITECTURE.md's Implementation Sequence table.
-7. Set DEVPLAN frontmatter: `blocked: true`. The `/close` bot command (or human) clears the gate by setting `blocked: false`.
+2. If any fakes cover real external dependencies, confirm a dependency probe has passed for each (see `/dependency-probe`)
+3. Apply remaining review fixes
+4. **DEVLOG learning review** — scan this phase's DEVLOG entries for trial-and-error patterns. Extract prescriptive one-liners and promote to DEVPLAN Gotchas.
+5. **Contract scan** — scan DEVLOG for Contract Changes markers. Propagate to upstream documents.
+6. **DEVPLAN cleanup** — reduce completed phase to a one-line summary with DEVLOG reference. Archive the previous phase's DEVLOG entries to `DEVLOG_archive.md`.
+7. Update module Status in ARCHITECTURE.md's Implementation Sequence table.
+8. Set DEVPLAN frontmatter: `blocked: true`. The `/close` bot command (or human) clears the gate by setting `blocked: false`.
 
 ---
 

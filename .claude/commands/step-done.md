@@ -16,22 +16,9 @@ Parse $ARGUMENTS for --amend or --commit (default is --commit).
    Contract changes field
 4. If --commit: create a new commit with a descriptive message
    If --amend: amend the previous commit
-5. Update DEVPLAN frontmatter:
-   - If this was the last step in the phase: set `state: review`
-   - Otherwise: keep `state: execute`
-   - If `steps_remaining` is present: decrement it by 1
-6. **Turn health check** (Codex only):
-   If `ITERATION_JSONL` was provided in the prompt, check total turns:
-   ```bash
-   grep -c '"item.completed"' "$ITERATION_JSONL"
-   ```
-   Compare to `steps_completed × 50`. If exceeded: ESCALATE — the worker
-   is spiraling. This is a safety check, not the budget mechanism.
-7. Briefly state what the next step is according to the DEVPLAN
-
-**If autonomous:**
-Commit. If `steps_remaining > 0` and state is `plan` or `execute`
-and turn health check passed: continue to next action.
-Otherwise: emit exit signal.
+5. Briefly state what the next step is according to the DEVPLAN
 
 **If supervised:** Do not start the next step until I say so.
+
+State transition and exit are handled by WORKER_SPEC §3–§4. Do not
+duplicate that logic here.

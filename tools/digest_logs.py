@@ -87,8 +87,8 @@ def digest_log(filepath):
         if 'Directory does not exist' in line:
             events.append(f"  TOOL FAIL: Glob path not found")
 
-        # LOOP_SIGNAL
-        if line.startswith('LOOP_SIGNAL:'):
+        # Exit signal (new format: EXIT: N, legacy: LOOP_SIGNAL:)
+        if line.startswith('EXIT:') or line.startswith('LOOP_SIGNAL:'):
             events.append(f"  {line}")
         if line.startswith('REASON:'):
             events.append(f"  {line}")

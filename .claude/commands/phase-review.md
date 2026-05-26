@@ -18,8 +18,9 @@ Present findings organized as:
 - Should fix (simplification, cleanup)
 - Optional (style, minor improvements)
 
-After review is complete, set DEVPLAN frontmatter `state: close`.
-
 **If autonomous:** Apply must-fix and should-fix items. Log skip decisions
-for optional items to DECISIONS.md. Commit and exit.
+for optional items to DECISIONS.md. Commit.
 **If supervised:** Do not implement. Wait for direction on what to fix.
+
+State transition and exit are handled by WORKER_SPEC §3–§4. Do not
+duplicate that logic here.
