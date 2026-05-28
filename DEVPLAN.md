@@ -1,8 +1,8 @@
 ---
 phase: 3
 blocked: false
-state: plan
-steps_remaining:
+state: execute
+steps_remaining: 7
 ---
 
 # Toolkit — Dev Plan
@@ -37,7 +37,7 @@ Consumers: Diplomat (first consumer, 4 modules share this pattern), Phosphene (f
 
 ## Phase 3: Structured LLM — Extract from Diplomat
 
-**Status:** Plan
+**Status:** In progress
 **Regime:** Build
 
 Scope: Extract the common "call LLM → parse JSON → validate against schema" pattern that diplomat duplicates across Extraction, Analyst, Generation, and Adversarial into a reusable `toolkit/structured_llm/` module. Then update diplomat to import the shared utilities.
@@ -149,3 +149,4 @@ Implemented typed cost budgets, pricing and estimates, append-only JSONL ledger 
 | 2026-05-16 | Phase 1 plan: 6-step cost_accountant implementation | state → execute; noted LLMRateLimitError gap (use LLMAPIError + status_code check) |
 | 2026-05-17 | Cost Accountant Phase 1 complete | Core implementation complete; 28 tests passing; blocked for human audit |
 | 2026-05-28 | Phase 2 plan: prompt_regression extraction | state → execute; runner dispatch will be consumer-provided via callback |
+| 2026-05-28 | Phase 3 plan: structured_llm extraction | state -> execute; reusable LLM JSON/schema helpers will be extracted from diplomat |

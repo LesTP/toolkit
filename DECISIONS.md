@@ -31,3 +31,10 @@ Priority: Important
 Decision: Extract the generic prompt regression runner with a `module_caller` callback instead of carrying diplomat's hardcoded module dispatch into toolkit.
 Rationale: Toolkit cannot depend on diplomat domain modules. Scenario loading, property evaluation, judging, and reporting are reusable, but calling extraction/generation/analyst/adversarial modules is consumer-specific wiring.
 Revisit if: Multiple consumers converge on the same module dispatch schema and a small optional adapter becomes clearly reusable.
+
+D-3: Structured LLM uses an injected client protocol
+Date: 2026-05-28 | Status: Closed
+Priority: Important
+Decision: Extract structured LLM helpers as a leaf module that accepts an injected client with `complete(messages, config, tier)` rather than importing `toolkit.llm_client`.
+Rationale: The duplicated diplomat pattern is reusable across consumers, but the toolkit module should remain independent and usable with fakes or consumer-owned LLM wrappers. This matches the prompt_regression injection pattern and preserves the no-cross-dependency rule.
+Revisit if: Multiple modules need a shared formal protocol type and the project approves a shared type package or an explicit dependency.

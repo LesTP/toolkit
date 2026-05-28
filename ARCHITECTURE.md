@@ -11,6 +11,7 @@
 | JSON-RPC Client | Async JSON-RPC 2.0 client over stdio. Request-response correlation, notification routing, subprocess transport. | none (leaf) | Extracted from codexbot codex_client.py |
 | Cost Accountant | Cost tracking and budget enforcement for LLM API calls. Wraps llm_client with pre-call estimation, budget checking, append-only ledger, rate-limit abort, and reporting. | LLM Client | New — motivated by Phosphene cost incidents |
 | Prompt Regression | Reusable prompt regression test framework: scenario loading, JSON path property checks, LLM judging, and run reporting with consumer-provided module dispatch. | none (leaf; injected LLM client protocol) | Extracted from diplomat tests/prompt_regression |
+| Structured LLM | Reusable call LLM, parse JSON, and validate schema helpers with an injected LLM client protocol. | none (leaf; injected LLM client protocol) | Extracted from diplomat modules |
 
 ## Data Flow
 
@@ -21,6 +22,7 @@
 - **SendResult** — success (bool), message_id (int|None), error (str|None)
 - **TelegramUpdate** — chat_id, user_id, message_text, command, args, message_id, raw
 - **Prompt Regression RunReport** — scenario results, property outcomes, judge verdicts, and summary counts
+- **Structured LLM JSON object** — parsed dict response validated against a caller-provided JSON Schema
 
 ### Flow
 No data flows between toolkit modules. Each is a leaf consumed independently by application projects. Application projects wire them together:
@@ -33,6 +35,7 @@ TGBot:           Repo content → LLM Client → Telegram Client
 Codexbot:        Telegram updates → Telegram Client (polling) → Command Router
                  Model queries → JSON-RPC Client → Codex app-server
 Diplomat:        Prompt scenarios → Prompt Regression → diplomat module callbacks → reports
+                 Domain prompts → Structured LLM → validated JSON → domain result types
 ```
 
 ## Implementation Sequence
@@ -46,12 +49,14 @@ Diplomat:        Prompt scenarios → Prompt Regression → diplomat module call
 | 5 | JSON-RPC Client | Leaf. Working in codexbot. Extract if second consumer materializes. | Complete |
 | 6 | Cost Accountant | Wraps LLM Client. Budget enforcement, cost ledger, rate-limit abort. Prerequisite for Phosphene LLM resume. | Complete |
 | 7 | Prompt Regression | Leaf test framework extracted from diplomat so prompt behavior checks can be reused by Diplomat and Phosphene. | Complete |
+| 8 | Structured LLM | Leaf helper module for repeated LLM JSON extraction and schema validation patterns shared across Diplomat and future consumers. | In progress |
 
 ## Coupling Notes
 
 - **No cross-dependencies** (with one exception). Toolkit modules never import from each other — except Cost Accountant, which wraps LLM Client. This is the only cross-module dependency. It's one-way, optional, and consumers that don't need cost tracking use LLM Client directly.
 - **Shared types are local.** Each module defines its own types.py. No shared types package across toolkit modules.
 - **Prompt Regression LLM access is injected.** The judge uses an llm_client-shaped object supplied by the consumer, so the module does not import LLM Client directly.
+- **Structured LLM access is injected.** Structured completion uses an llm_client-shaped object supplied by the consumer, so the module does not import LLM Client directly.
 - **Consumer coupling is one-way.** Application projects import from toolkit. Toolkit never imports from application projects.
 - Adding a new module is purely additive — no existing modules or consumers are affected.
 - Adding a new provider/strategy to an existing module is internal — consumers are not affected if they use the tier/strategy abstraction.

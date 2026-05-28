@@ -172,3 +172,14 @@ defines scenario loading, JSON path helpers, dataclass outputs, `LLMJudge`, and
 `ScenarioRunner` with consumer-provided `module_caller` dispatch. It also
 documents that the judge uses an injected `complete(messages, config, tier)`
 client protocol rather than importing `toolkit.llm_client`.
+
+---
+
+## 2026-05-28 — Structured LLM Phase 3 planned
+
+**Module:** Structured LLM | **Phase:** 3 | **Regime:** Build | **Result:** plan moved to execution
+
+Registered Structured LLM in the toolkit architecture and moved the phase into
+execution. The phase will extract diplomat's repeated LLM completion, JSON
+parsing, JSON Schema validation, and prompt/schema loading helpers into a leaf
+`toolkit.structured_llm` module with an injected client protocol.
