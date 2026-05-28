@@ -1,8 +1,8 @@
 ---
 phase: 2
 blocked: false
-state: plan
-steps_remaining:
+state: execute
+steps_remaining: 7
 ---
 
 # Toolkit — Dev Plan
@@ -17,12 +17,11 @@ Consumers: Diplomat (first consumer, migrating from local implementation), Phosp
 - **PYTHONPATH:** When running tests, set `PYTHONPATH=/home/claude/workspace/toolkit/src` so pytest can find the `toolkit` package, or use `cd /home/claude/workspace/toolkit && /home/claude/toolkit-venv/bin/python3 -m pytest`.
 
 ### Key Context
-- **Wraps llm_client:** Only cross-module dependency in toolkit. Consumers replace `llm_client.complete()` with `accountant.complete(budget=...)`.
-- **Dependencies:** stdlib only (json, pathlib, datetime, dataclasses) + toolkit/llm_client
-- **Ledger format:** Append-only JSONL. One line per call. Stable schema.
-- **Budget enforcement:** per-call, per-operation, per-session. Three levels.
-- **Abort on hard errors:** spending cap and rate limit errors → immediate abort, no retry.
-- **Token estimation:** chars ÷ 4 heuristic (overestimates → conservative budgets).
+- **Extraction source:** `diplomat/tests/prompt_regression/` is the source implementation.
+- **Dependencies:** stdlib only for types and runner; judge accepts an injected LLM client with `complete(messages, config, tier)`.
+- **Consumer dispatch:** Toolkit runner must use a pluggable `module_caller` callback; diplomat keeps domain-specific module wiring.
+- **Scenario contract:** JSON scenario files define module input plus property checks; toolkit owns loading, JSON path helpers, judging, and reporting.
+- **Migration target:** Diplomat becomes the first consumer; Phosphene is the future second consumer.
 
 ## Current Status
 | Module | Status |
@@ -37,7 +36,7 @@ Consumers: Diplomat (first consumer, migrating from local implementation), Phosp
 
 ## Phase 2: Prompt Regression — Extract from Diplomat
 
-**Status:** Plan
+**Status:** In progress
 **Regime:** Build
 
 Scope: Extract the prompt regression framework (types, judge, runner) from `diplomat/tests/prompt_regression/` into `toolkit/prompt_regression/` as a reusable module. Then update diplomat to import from toolkit instead of its local copy. Reference: diplomat's `diplomat-testing-doc.md` §4.
@@ -117,3 +116,4 @@ Implemented typed cost budgets, pricing and estimates, append-only JSONL ledger 
 | 2026-05-16 | Migrated frontmatter to e2e template schema (`phase`, `blocked`, `state`) | Wired toolkit into autonomous loop runner; active module = Cost Accountant, state = plan |
 | 2026-05-16 | Phase 1 plan: 6-step cost_accountant implementation | state → execute; noted LLMRateLimitError gap (use LLMAPIError + status_code check) |
 | 2026-05-17 | Cost Accountant Phase 1 complete | Core implementation complete; 28 tests passing; blocked for human audit |
+| 2026-05-28 | Phase 2 plan: prompt_regression extraction | state → execute; runner dispatch will be consumer-provided via callback |

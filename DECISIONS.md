@@ -24,3 +24,10 @@ Priority: Important
 Decision: Detect rate limit errors via `LLMAPIError.status_code == 429` or message containing "rate limit". No dedicated `LLMRateLimitError` class exists in llm_client — the ARCH spec references it but it was never added.
 Rationale: ARCH_cost_accountant.md §Dependencies says to import `LLMRateLimitError` from llm_client, but llm_client/types.py has only `LLMAPIError` and `LLMResponseError`. Modifying llm_client is a cross-module change requiring ESCALATE, so detect rate limits via status_code and message on base `LLMAPIError` instead.
 Revisit if: llm_client adds `LLMRateLimitError` subclass — then import and use it directly.
+
+D-2: Prompt Regression runner dispatch is consumer-provided
+Date: 2026-05-28 | Status: Closed
+Priority: Important
+Decision: Extract the generic prompt regression runner with a `module_caller` callback instead of carrying diplomat's hardcoded module dispatch into toolkit.
+Rationale: Toolkit cannot depend on diplomat domain modules. Scenario loading, property evaluation, judging, and reporting are reusable, but calling extraction/generation/analyst/adversarial modules is consumer-specific wiring.
+Revisit if: Multiple consumers converge on the same module dispatch schema and a small optional adapter becomes clearly reusable.

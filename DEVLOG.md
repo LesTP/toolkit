@@ -149,3 +149,15 @@ the cost accountant test suite. Verified with
 ### Not in scope (deferred to later phases)
 - similarity() and batch_similarity() — Phase 2
 - In-memory LRU cache and disk cache — Phase 3
+
+---
+
+## 2026-05-28 — Prompt Regression Phase 2 planned
+
+**Module:** Prompt Regression | **Phase:** 2 | **Regime:** Build | **Result:** plan moved to execution
+
+Registered Prompt Regression in the toolkit architecture and corrected the
+active DEVPLAN context for extraction from diplomat. The phase will extract
+generic scenario types, JSON path helpers, LLM judging, and runner/reporting
+logic into `toolkit.prompt_regression`, while diplomat keeps the
+domain-specific module dispatch through a `module_caller` callback.
