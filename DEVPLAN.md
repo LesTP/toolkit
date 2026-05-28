@@ -1,16 +1,16 @@
 ---
-phase: 1
+phase: 2
 blocked: false
 state: plan
-steps_remaining: 0
+steps_remaining:
 ---
 
 # Toolkit — Dev Plan
 
 ## Cold Start
-Active module: **Cost Accountant** (sixth in implementation sequence).
-Load: ARCH_cost_accountant.md for contract, PROJECT.md for constraints, ARCHITECTURE.md for context.
-Consumers waiting: Phosphene (prerequisite for all future LLM operations — API spending cap hit, no LLM calls until accountant is in place).
+Active module: **Prompt Regression** (extraction from diplomat project).
+Load: ARCH_prompt_regression.md for contract, PROJECT.md for constraints, ARCHITECTURE.md for context.
+Consumers: Diplomat (first consumer, migrating from local implementation), Phosphene (future).
 
 ### Gotchas
 - **Running tests:** Use `/home/claude/toolkit-venv/bin/python3 -m pytest` (not bare `pytest` or `python3 -m pytest` — those hit system Python which has no pytest). The venv is inside the container at `/home/claude/toolkit-venv/`.
@@ -33,6 +33,33 @@ Consumers waiting: Phosphene (prerequisite for all future LLM operations — API
 | Telegram Client | Complete |
 | JSON-RPC Client | Complete |
 | Cost Accountant | Complete (Phase 1, 28 tests) |
+| Prompt Regression | Phase 2 — extracting from diplomat |
+
+## Phase 2: Prompt Regression — Extract from Diplomat
+
+**Status:** Plan
+**Regime:** Build
+
+Scope: Extract the prompt regression framework (types, judge, runner) from `diplomat/tests/prompt_regression/` into `toolkit/prompt_regression/` as a reusable module. Then update diplomat to import from toolkit instead of its local copy. Reference: diplomat's `diplomat-testing-doc.md` §4.
+
+**Source files (in diplomat):**
+- `tests/prompt_regression/types.py` — dataclasses, scenario loading, JSON path helpers. Zero external deps.
+- `tests/prompt_regression/judge.py` — LLMJudge. Uses `llm_client.complete()` interface.
+- `tests/prompt_regression/runner.py` — ScenarioRunner. Has diplomat-specific `_call_module()` dispatch and `_default_module_builders()`.
+
+**Key design decision:** The runner's `_call_module()` currently hardcodes how to call extraction, generation, analyst, and adversarial modules. For toolkit, this needs to become a pluggable callback so each consumer project provides its own module dispatch. The runner core (property evaluation, scenario loading, reporting) is fully generic.
+
+Steps:
+
+- [ ] 2.1 — **Create ARCH_prompt_regression.md.** Define the module contract: types (PropertyCheck, PropertyResult, ScenarioResult, RunReport, JudgeResult), LLMJudge interface, ScenarioRunner interface with pluggable `module_caller` callback, JSON path helpers, scenario loading. Document that the LLM judge uses the same `complete(messages, config, tier)` interface as `toolkit/llm_client`. Add the module to ARCHITECTURE.md component map.
+
+- [ ] 2.2 — **Create `toolkit/prompt_regression/` with types and judge.** Copy `types.py` and `judge.py` from diplomat verbatim (they have zero diplomat dependencies). Create `toolkit/prompt_regression/__init__.py` with public exports. Add unit tests to toolkit's test suite: JSON path helpers (exists, get, edge cases) and judge parsing (PASS, FAIL, malformed, invalid verdict). Run toolkit regression.
+
+- [ ] 2.3 — **Extract runner with pluggable module dispatch.** Create `toolkit/prompt_regression/runner.py`. The `ScenarioRunner` constructor accepts `module_caller: Callable[[str, Any, dict], Awaitable[Any]]` instead of hardcoding `_call_module()`. Move `_evaluate_property`, `_normalize_output`, `_judge_response_text`, `run_scenario`, `run_all` as-is. Remove diplomat-specific imports (`DecisionContext`, `RuleBasedExtractor`, `LLMGenerator`) and the `_default_module_builders` / CLI entry point — those stay in diplomat. Add a runner test with a fake module_caller. Run toolkit regression.
+
+- [ ] 2.4 — **Update diplomat to consume from toolkit.** Replace diplomat's `tests/prompt_regression/types.py`, `judge.py`, and the generic parts of `runner.py` with imports from `toolkit.prompt_regression`. Keep diplomat's `tests/prompt_regression/` directory with: a thin `runner.py` that provides the diplomat-specific `module_caller` and CLI entry point, and the scenario JSON files. Update diplomat's test imports. Run diplomat's full 212-test regression.
+
+- [ ] 2.5 — **Documentation and regression.** Verify both toolkit and diplomat test suites pass. Update toolkit ARCHITECTURE.md, DEVPLAN summary, DEVLOG. Update diplomat's `diplomat-testing-doc.md` to note the toolkit dependency. Transition to `state: review`.
 
 ## Phase 1: Cost Accountant — Core Implementation
 

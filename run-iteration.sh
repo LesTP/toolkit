@@ -93,17 +93,24 @@ PROMPT="MANDATORY FIRST STEP: Read ${ADAPTER_FILE} now. It contains references t
 
 You are a stateless worker. You have no memory of previous iterations. Reconstruct all state from files.
 
-After reading ${ADAPTER_FILE} and its references, determine current state from DEVPLAN.md. Follow the Worker Spec main loop (§4) — pseudocode, not interpretation."
+After reading ${ADAPTER_FILE} and its references, enter the main loop from WORKER_SPEC \u00a73: call bash tools/state_machine.sh before each action."
 
-# Add multi-step budget to prompt if requested
-if [[ $MULTI_STEP -gt 1 ]]; then
+# Export env vars for state_machine.sh
+export STEP_BUDGET=$MULTI_STEP
+if [[ $STEP_BUDGET -lt 1 ]]; then STEP_BUDGET=1; fi
+export STEP_BUDGET
+export STOP_BEFORE_REVIEW="$TO_REVIEW"
+export DEVPLAN_PATH="$PROJECT_DIR/DEVPLAN.md"
+
+# Add STEP_BUDGET and STOP_BEFORE_REVIEW to prompt so the worker knows
+# the values (for reference only — the script reads env vars directly)
+if [[ $STEP_BUDGET -gt 1 ]]; then
   PROMPT="$PROMPT
 
-STEPS_REMAINING: $MULTI_STEP"
+STEP_BUDGET: $STEP_BUDGET"
 fi
 
-# Add stop-before-review flag if requested
-if [[ "$TO_REVIEW" == "true" ]]; then
+if [[ "$STOP_BEFORE_REVIEW" == "true" ]]; then
   PROMPT="$PROMPT
 
 STOP_BEFORE_REVIEW: true"
@@ -142,6 +149,12 @@ while [[ $ITER -le $END_ITER ]]; do
   LAST_MSG_FILE="$LOG_DIR/.last_message.tmp"
 
   echo "=== Iteration $ITER ($BACKEND) — $(date -Iseconds) ==="
+
+  # Reset steps_remaining so state_machine.sh reinitializes from STEP_BUDGET.
+  # Without this, a stale value from a previous invocation or manual edit
+  # overrides the --multi-step budget (state_machine.sh only initializes
+  # steps_remaining when it is empty, not when it is 0).
+  sed -i 's/^steps_remaining:.*/steps_remaining:/' "$PROJECT_DIR/DEVPLAN.md"
 
   case $BACKEND in
     claude)
