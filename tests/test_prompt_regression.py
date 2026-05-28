@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass
 from typing import Any
@@ -159,32 +160,34 @@ class FakeLLMClient:
         return self.response
 
 
-@pytest.mark.asyncio
-async def test_llm_judge_pass():
-    client = FakeLLMClient("PASS|Criteria met.")
-    judge = LLMJudge(client, {}, tier="commodity")
-    result = await judge.evaluate(
-        response_text="Some response",
-        criteria="Must be polite",
-        pass_instruction="PASS if polite",
-        fail_instruction="FAIL if rude",
-    )
-    assert result.verdict == "PASS"
-    assert result.explanation == "Criteria met."
-    assert len(client.calls) == 1
+def test_llm_judge_pass():
+    async def _run():
+        client = FakeLLMClient("PASS|Criteria met.")
+        judge = LLMJudge(client, {}, tier="commodity")
+        result = await judge.evaluate(
+            response_text="Some response",
+            criteria="Must be polite",
+            pass_instruction="PASS if polite",
+            fail_instruction="FAIL if rude",
+        )
+        assert result.verdict == "PASS"
+        assert result.explanation == "Criteria met."
+        assert len(client.calls) == 1
+    asyncio.run(_run())
 
 
-@pytest.mark.asyncio
-async def test_llm_judge_fail():
-    client = FakeLLMClient("FAIL|Too aggressive.")
-    judge = LLMJudge(client, {}, tier="commodity")
-    result = await judge.evaluate(
-        response_text="Some response",
-        criteria="Must be polite",
-        pass_instruction="PASS if polite",
-        fail_instruction="FAIL if rude",
-    )
-    assert result.verdict == "FAIL"
+def test_llm_judge_fail():
+    async def _run():
+        client = FakeLLMClient("FAIL|Too aggressive.")
+        judge = LLMJudge(client, {}, tier="commodity")
+        result = await judge.evaluate(
+            response_text="Some response",
+            criteria="Must be polite",
+            pass_instruction="PASS if polite",
+            fail_instruction="FAIL if rude",
+        )
+        assert result.verdict == "FAIL"
+    asyncio.run(_run())
 
 
 # --- ScenarioRunner ---
@@ -209,82 +212,85 @@ async def fake_module_caller(module_name: str, input_data: Any, metadata: dict) 
     raise ValueError(f"Unsupported module: {module_name}")
 
 
-@pytest.mark.asyncio
-async def test_runner_structural_check():
-    runner = ScenarioRunner(
-        llm_client=FakeLLMClient(),
-        llm_config={},
-        module_caller=fake_module_caller,
-    )
-    scenario = {
-        "scenario_id": "test.promise",
-        "description": "Promise is pending.",
-        "module": "extraction",
-        "input": {"text": "Alpha promises Beta support."},
-        "expected_properties": [
-            {
-                "type": "json_path_equals",
-                "description": "Status is pending.",
-                "path": "patch.data.promises[0].status",
-                "value": "pending",
-            }
-        ],
-    }
-    result = await runner.run_scenario(scenario)
-    assert result.passed is True
-    assert result.scenario_id == "test.promise"
+def test_runner_structural_check():
+    async def _run():
+        runner = ScenarioRunner(
+            llm_client=FakeLLMClient(),
+            llm_config={},
+            module_caller=fake_module_caller,
+        )
+        scenario = {
+            "scenario_id": "test.promise",
+            "description": "Promise is pending.",
+            "module": "extraction",
+            "input": {"text": "Alpha promises Beta support."},
+            "expected_properties": [
+                {
+                    "type": "json_path_equals",
+                    "description": "Status is pending.",
+                    "path": "patch.data.promises[0].status",
+                    "value": "pending",
+                }
+            ],
+        }
+        result = await runner.run_scenario(scenario)
+        assert result.passed is True
+        assert result.scenario_id == "test.promise"
+    asyncio.run(_run())
 
 
-@pytest.mark.asyncio
-async def test_runner_failing_check():
-    runner = ScenarioRunner(
-        llm_client=FakeLLMClient(),
-        llm_config={},
-        module_caller=fake_module_caller,
-    )
-    scenario = {
-        "scenario_id": "test.mismatch",
-        "description": "Status mismatch.",
-        "module": "extraction",
-        "input": {"text": "anything"},
-        "expected_properties": [
-            {
-                "type": "json_path_equals",
-                "description": "Should be kept.",
-                "path": "patch.data.promises[0].status",
-                "value": "kept",
-            }
-        ],
-    }
-    result = await runner.run_scenario(scenario)
-    assert result.passed is False
-    assert result.properties[0].expected == "kept"
-    assert result.properties[0].actual == "pending"
+def test_runner_failing_check():
+    async def _run():
+        runner = ScenarioRunner(
+            llm_client=FakeLLMClient(),
+            llm_config={},
+            module_caller=fake_module_caller,
+        )
+        scenario = {
+            "scenario_id": "test.mismatch",
+            "description": "Status mismatch.",
+            "module": "extraction",
+            "input": {"text": "anything"},
+            "expected_properties": [
+                {
+                    "type": "json_path_equals",
+                    "description": "Should be kept.",
+                    "path": "patch.data.promises[0].status",
+                    "value": "kept",
+                }
+            ],
+        }
+        result = await runner.run_scenario(scenario)
+        assert result.passed is False
+        assert result.properties[0].expected == "kept"
+        assert result.properties[0].actual == "pending"
+    asyncio.run(_run())
 
 
-@pytest.mark.asyncio
-async def test_runner_run_all(tmp_path):
-    scenario = {
-        "scenario_id": "test.all",
-        "description": "Batch test.",
-        "module": "extraction",
-        "input": {"text": "Alpha promises Beta."},
-        "expected_properties": [
-            {
-                "type": "json_path_exists",
-                "description": "Has promises.",
-                "path": "patch.data.promises[0]",
-            }
-        ],
-    }
-    (tmp_path / "test.json").write_text(json.dumps(scenario), encoding="utf-8")
+def test_runner_run_all(tmp_path):
+    async def _run():
+        scenario = {
+            "scenario_id": "test.all",
+            "description": "Batch test.",
+            "module": "extraction",
+            "input": {"text": "Alpha promises Beta."},
+            "expected_properties": [
+                {
+                    "type": "json_path_exists",
+                    "description": "Has promises.",
+                    "path": "patch.data.promises[0]",
+                }
+            ],
+        }
+        (tmp_path / "test.json").write_text(json.dumps(scenario), encoding="utf-8")
 
-    runner = ScenarioRunner(
-        llm_client=FakeLLMClient(),
-        llm_config={},
-        module_caller=fake_module_caller,
-    )
-    report = await runner.run_all(tmp_path)
-    assert report.total == 1
-    assert report.passed == 1
-    assert len(report.results) == 1
+        runner = ScenarioRunner(
+            llm_client=FakeLLMClient(),
+            llm_config={},
+            module_caller=fake_module_caller,
+        )
+        report = await runner.run_all(tmp_path)
+        assert report.total == 1
+        assert report.passed == 1
+        assert len(report.results) == 1
+    asyncio.run(_run())
