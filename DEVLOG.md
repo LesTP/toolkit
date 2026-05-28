@@ -183,3 +183,14 @@ Registered Structured LLM in the toolkit architecture and moved the phase into
 execution. The phase will extract diplomat's repeated LLM completion, JSON
 parsing, JSON Schema validation, and prompt/schema loading helpers into a leaf
 `toolkit.structured_llm` module with an injected client protocol.
+
+### Step 3.1: Structured LLM architecture contract
+Mode: Build
+Outcome: Complete
+Contract changes: Added `ARCH_structured_llm.md`; ARCHITECTURE.md lists Structured LLM as an in-progress leaf module.
+
+Created the structured LLM module contract before implementation. The ARCH
+defines `structured_complete`, `parse_json_response`, `validate_json_schema`,
+`load_prompt`, and `load_schema`, and documents that LLM access is injected via
+the `complete(messages, config, tier)` protocol instead of importing
+`toolkit.llm_client`.

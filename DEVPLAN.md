@@ -2,7 +2,7 @@
 phase: 3
 blocked: false
 state: execute
-steps_remaining: 7
+steps_remaining: 6
 ---
 
 # Toolkit — Dev Plan
@@ -60,7 +60,7 @@ Scope: Extract the common "call LLM → parse JSON → validate against schema" 
 
 Steps:
 
-- [ ] 3.1 — **Create ARCH_structured_llm.md and update ARCHITECTURE.md.** Define the module contract: `structured_complete`, `parse_json_response`, `validate_json_schema`, `load_prompt`, `load_schema`. Document that the LLM client protocol matches `toolkit/llm_client` but is injected, not imported.
+- [x] 3.1 — **Create ARCH_structured_llm.md and update ARCHITECTURE.md.** Define the module contract: `structured_complete`, `parse_json_response`, `validate_json_schema`, `load_prompt`, `load_schema`. Document that the LLM client protocol matches `toolkit/llm_client` but is injected, not imported.
 
 - [ ] 3.2 — **Create `toolkit/structured_llm/` module.** Implement `__init__.py`, `core.py` with the five functions extracted from diplomat. All functions are standalone (no classes needed). `validate_json_schema` takes an optional `label` parameter for error message prefixing (replaces diplomat's per-module "State patch failed..." / "Intelligence report failed..." variants). Add unit tests: parse valid/invalid JSON, schema validation pass/fail with path formatting, load_prompt/load_schema, structured_complete with fake client. Run toolkit regression.
 
