@@ -1,16 +1,16 @@
 ---
-phase: 2
+phase: 3
 blocked: false
-state: execute
-steps_remaining: 5
+state: plan
+steps_remaining:
 ---
 
 # Toolkit — Dev Plan
 
 ## Cold Start
-Active module: **Prompt Regression** (extraction from diplomat project).
-Load: ARCH_prompt_regression.md for contract, PROJECT.md for constraints, ARCHITECTURE.md for context.
-Consumers: Diplomat (first consumer, migrating from local implementation), Phosphene (future).
+Active module: **Structured LLM** (extraction from diplomat project).
+Load: ARCH_structured_llm.md for contract, PROJECT.md for constraints, ARCHITECTURE.md for context.
+Consumers: Diplomat (first consumer, 4 modules share this pattern), Phosphene (future).
 
 ### Gotchas
 - **Running tests:** Use `/home/claude/toolkit-venv/bin/python3 -m pytest` (not bare `pytest` or `python3 -m pytest` — those hit system Python which has no pytest). The venv is inside the container at `/home/claude/toolkit-venv/`.
@@ -33,6 +33,49 @@ Consumers: Diplomat (first consumer, migrating from local implementation), Phosp
 | JSON-RPC Client | Complete |
 | Cost Accountant | Complete (Phase 1, 28 tests) |
 | Prompt Regression | Complete (Phase 2, 26 tests) |
+| Structured LLM | Phase 3 — extracting from diplomat |
+
+## Phase 3: Structured LLM — Extract from Diplomat
+
+**Status:** Plan
+**Regime:** Build
+
+Scope: Extract the common "call LLM → parse JSON → validate against schema" pattern that diplomat duplicates across Extraction, Analyst, Generation, and Adversarial into a reusable `toolkit/structured_llm/` module. Then update diplomat to import the shared utilities.
+
+**The duplicated pattern (4 copies in diplomat):**
+- `_complete()` — call `llm_client.complete(messages, config, tier)`, await if needed, verify str response. Identical in analyst, adversarial, generation; extraction has a slight variant.
+- `parse_json_object()` — `json.loads()` → dict, raise `ValueError` on failure. Lives in extraction, imported by analyst + adversarial.
+- `validate_*(data, schema)` — `Draft202012Validator(schema).validate(data)`, format `ValidationError` with path. Nearly identical in all four modules — only the error message prefix differs.
+- `load_prompt()` / `load_schema()` — read text file, parse JSON for schema. Lives in extraction, imported by analyst + adversarial.
+
+**What toolkit gets:**
+- `structured_complete(llm_client, config, tier, messages)` — async LLM call with `isawaitable` handling, plain-str verification
+- `parse_json_response(response_text)` — parse JSON string → dict with clear error
+- `validate_json_schema(data, schema, label="")` — validate dict against JSON schema, format error with path and label
+- `load_prompt(path)` / `load_schema(path)` — file I/O helpers
+
+**What stays in diplomat:** Domain-specific result types (`ExtractionResult`, `AnalysisResult`, `AdversarialResult`, `GenerationResult`), `_build_messages()` methods, module constructors, domain-specific validation wrappers (e.g., `validate_state_patch` wrapping the generic validator + returning `StatePatch`).
+
+**Dependencies:** `jsonschema` (stdlib-external). The module uses the same injected LLM client protocol as prompt_regression — `complete(messages, config, tier)` returning plain str.
+
+Steps:
+
+- [ ] 3.1 — **Create ARCH_structured_llm.md and update ARCHITECTURE.md.** Define the module contract: `structured_complete`, `parse_json_response`, `validate_json_schema`, `load_prompt`, `load_schema`. Document that the LLM client protocol matches `toolkit/llm_client` but is injected, not imported.
+
+- [ ] 3.2 — **Create `toolkit/structured_llm/` module.** Implement `__init__.py`, `core.py` with the five functions extracted from diplomat. All functions are standalone (no classes needed). `validate_json_schema` takes an optional `label` parameter for error message prefixing (replaces diplomat's per-module "State patch failed..." / "Intelligence report failed..." variants). Add unit tests: parse valid/invalid JSON, schema validation pass/fail with path formatting, load_prompt/load_schema, structured_complete with fake client. Run toolkit regression.
+
+- [ ] 3.3 — **Update diplomat to use toolkit utilities.** Replace diplomat's local copies:
+  - `extraction/__init__.py`: replace `parse_json_object`, `load_prompt`, `load_schema`, `validate_state_patch` body with imports from `toolkit.structured_llm`
+  - `analyst/__init__.py`: replace `validate_intelligence_report` body, remove `parse_json_object` import from extraction, replace `_complete()` with `structured_complete`
+  - `adversarial/__init__.py`: same as analyst — replace validate + complete
+  - `generation/__init__.py`: replace `_complete()` with `structured_complete` if applicable (generation has review-gate JSON parsing which is different)
+  - Keep all domain types and `_build_messages()` unchanged
+  - Update diplomat tests — fakes may need adjustment if `_complete` signature changed
+  - Run diplomat full regression (212 tests)
+
+- [ ] 3.4 — **Generate `deps/toolkit_api.md` for diplomat.** Create the vendored contract file covering all toolkit modules diplomat depends on: `llm_client`, `telegram_client`, `cost_accountant`, `prompt_regression`, `structured_llm`. Extract exact type signatures from toolkit source. This replaces ARCH-prose-based fake building for future phases.
+
+- [ ] 3.5 — **Documentation and regression.** Verify both toolkit and diplomat test suites pass. Update toolkit ARCHITECTURE.md, DEVPLAN summary. Transition to `state: review`.
 
 ## Phase 2: Prompt Regression — Extract from Diplomat
 
