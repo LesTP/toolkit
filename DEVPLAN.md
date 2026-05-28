@@ -2,7 +2,7 @@
 phase: 3
 blocked: false
 state: execute
-steps_remaining: 5
+steps_remaining: 4
 ---
 
 # Toolkit — Dev Plan
@@ -33,14 +33,14 @@ Consumers: Diplomat (first consumer, 4 modules share this pattern), Phosphene (f
 | JSON-RPC Client | Complete |
 | Cost Accountant | Complete (Phase 1, 28 tests) |
 | Prompt Regression | Complete (Phase 2, 26 tests) |
-| Structured LLM | Phase 3 — extracting from diplomat |
+| Structured LLM | Complete (Phase 3) |
 
 ## Phase 3: Structured LLM — Extract from Diplomat
 
-**Status:** In progress
+**Status:** Complete
 **Regime:** Build
 
-Scope: Extract the common "call LLM → parse JSON → validate against schema" pattern that diplomat duplicates across Extraction, Analyst, Generation, and Adversarial into a reusable `toolkit/structured_llm/` module. Then update diplomat to import the shared utilities.
+Extracted structured LLM utilities (structured_complete, parse_json_response, validate_json_schema, load_prompt, load_schema) into `toolkit/structured_llm/`. Updated diplomat extraction, analyst, and adversarial modules to import from toolkit. Generated `deps/toolkit_api.md` vendored contract file in diplomat. All tests pass (toolkit + diplomat 212).
 
 **The duplicated pattern (4 copies in diplomat):**
 - `_complete()` — call `llm_client.complete(messages, config, tier)`, await if needed, verify str response. Identical in analyst, adversarial, generation; extraction has a slight variant.
