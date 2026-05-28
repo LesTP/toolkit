@@ -22,5 +22,6 @@ Present findings organized as:
 for optional items to DECISIONS.md. Commit.
 **If supervised:** Do not implement. Wait for direction on what to fix.
 
-State transition and exit are handled by WORKER_SPEC §3–§4. Do not
-duplicate that logic here.
+State transition and exit are handled by WORKER_SPEC §3. Do not duplicate
+that logic here — always return to the main loop (step 1: call state_machine.sh)
+after completing this action.

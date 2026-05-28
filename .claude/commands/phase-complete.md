@@ -31,5 +31,6 @@ Execute the phase completion protocol:
 
 **If supervised:** Do not commit. Wait for explicit confirmation.
 
-State transition and exit are handled by WORKER_SPEC §3–§4 (close is
-terminal — always exits). Do not duplicate that logic here.
+State transition and exit are handled by WORKER_SPEC §3. Do not duplicate
+that logic here — always return to the main loop (step 1: call state_machine.sh)
+after completing this action.

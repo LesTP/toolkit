@@ -21,6 +21,8 @@ Examples: data models, algorithms, parsers, API contracts, integration wiring, b
 
 When a module's tests use fakes or stubs for real external dependencies, at least one probe exercising the real interface must pass before phase-complete is accepted. Fakes that have never been checked against the real implementation encode assumptions, not contracts. See `/dependency-probe`.
 
+When building fakes for an external dependency that is not importable in the current environment, derive the fake's type signatures from the dependency's **source files** (type definitions, function signatures, ARCH docs), not from prose descriptions in the consumer's ARCH file. If the source files are accessible on a shared filesystem, read them. If they are inaccessible, log the unverified fake in DEVLOG with a warning listing which fields and return types are assumed. Prose descriptions like "calls X.complete()" do not specify parameter types, return types, or construction patterns — those must come from the real source.
+
 **Refine (human-evaluable):** Correctness requires human perception or subjective judgment.
 - Goals and constraints specified upfront; steps emerge iteratively
 - Small increments shown to human frequently
@@ -220,6 +222,8 @@ blocked: false
 `blocked` is the single source of truth for whether work is gated. When `true`, no work should proceed until it is cleared to `false`.
 
 Projects using autonomous execution add a `state` field — see WORKER_SPEC.md.
+
+**`steps_remaining`:** This field is managed by the state machine at runtime and must **not** be pre-populated in DEVPLAN. Leave it empty (e.g., `steps_remaining:` with no value) or omit it. The state machine initializes it from the `STEP_BUDGET` environment variable set by `run-iteration.sh --multi-step N`. Pre-populating a value causes `--multi-step` to be silently ignored.
 
 **Cold Start Summary** (stable — update on major shifts):
 - **What this is** — one-sentence scope
