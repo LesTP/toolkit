@@ -2,7 +2,7 @@
 phase: 2
 blocked: false
 state: execute
-steps_remaining: 7
+steps_remaining: 6
 ---
 
 # Toolkit — Dev Plan
@@ -50,7 +50,7 @@ Scope: Extract the prompt regression framework (types, judge, runner) from `dipl
 
 Steps:
 
-- [ ] 2.1 — **Create ARCH_prompt_regression.md.** Define the module contract: types (PropertyCheck, PropertyResult, ScenarioResult, RunReport, JudgeResult), LLMJudge interface, ScenarioRunner interface with pluggable `module_caller` callback, JSON path helpers, scenario loading. Document that the LLM judge uses the same `complete(messages, config, tier)` interface as `toolkit/llm_client`. Add the module to ARCHITECTURE.md component map.
+- [x] 2.1 — **Create ARCH_prompt_regression.md.** Define the module contract: types (PropertyCheck, PropertyResult, ScenarioResult, RunReport, JudgeResult), LLMJudge interface, ScenarioRunner interface with pluggable `module_caller` callback, JSON path helpers, scenario loading. Document that the LLM judge uses the same `complete(messages, config, tier)` interface as `toolkit/llm_client`. Add the module to ARCHITECTURE.md component map.
 
 - [ ] 2.2 — **Create `toolkit/prompt_regression/` with types and judge.** Copy `types.py` and `judge.py` from diplomat verbatim (they have zero diplomat dependencies). Create `toolkit/prompt_regression/__init__.py` with public exports. Add unit tests to toolkit's test suite: JSON path helpers (exists, get, edge cases) and judge parsing (PASS, FAIL, malformed, invalid verdict). Run toolkit regression.
 

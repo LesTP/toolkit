@@ -161,3 +161,14 @@ active DEVPLAN context for extraction from diplomat. The phase will extract
 generic scenario types, JSON path helpers, LLM judging, and runner/reporting
 logic into `toolkit.prompt_regression`, while diplomat keeps the
 domain-specific module dispatch through a `module_caller` callback.
+
+### Step 2.1: Prompt Regression architecture contract
+Mode: Build
+Outcome: Complete
+Contract changes: Added `ARCH_prompt_regression.md`; ARCHITECTURE.md already lists Prompt Regression from phase planning.
+
+Created the prompt regression module contract before implementation. The ARCH
+defines scenario loading, JSON path helpers, dataclass outputs, `LLMJudge`, and
+`ScenarioRunner` with consumer-provided `module_caller` dispatch. It also
+documents that the judge uses an injected `complete(messages, config, tier)`
+client protocol rather than importing `toolkit.llm_client`.
