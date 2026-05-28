@@ -194,3 +194,26 @@ defines `structured_complete`, `parse_json_response`, `validate_json_schema`,
 `load_prompt`, and `load_schema`, and documents that LLM access is injected via
 the `complete(messages, config, tier)` protocol instead of importing
 `toolkit.llm_client`.
+
+### Step 3.2: Structured LLM module implementation
+Mode: Build
+Outcome: Complete
+Contract changes: Added `toolkit.structured_llm` public API and declared `jsonschema` as a runtime dependency.
+
+Implemented `structured_complete`, `parse_json_response`,
+`validate_json_schema`, `load_prompt`, and `load_schema` in
+`src/toolkit/structured_llm/`. Added 13 unit tests covering JSON parsing,
+schema validation path/label formatting, file loaders, sync and async fake LLM
+clients, and non-text response rejection.
+
+Verification:
+- `tests/structured_llm/`: 13 passed
+- `tests/test_prompt_regression.py`: 26 passed
+- `tests/cost_accountant/`: 28 passed
+- `tests/llm_client/`: 29 passed
+
+Full `pytest` was not usable in this environment: `jsonschema` had to be
+installed into a temporary local target because the shared venv is not
+writable, `numpy` is absent for embedding/clustering, and collecting all test
+directories together hits existing duplicate `test_core.py` module-name
+collisions. The temporary dependency target was removed after verification.
