@@ -14,41 +14,45 @@ reporting.
 ## Public API
 
 ### load_scenario
-- **Signature:** `load_scenario(path: str | Path) -> Scenario`
+- **Signature:** `load_scenario(path: str | Path) -> dict[str, Any]`
 - **Parameters:**
   - path: JSON scenario file path
-- **Returns:** `Scenario`
-- **Errors:**
-  - `ScenarioLoadError` — file is missing, invalid JSON, or missing required
-    fields.
+- **Returns:** validated scenario dict
+- **Errors:** `ValueError` — file is missing, invalid JSON, or missing required fields.
+
+### load_scenarios
+- **Signature:** `load_scenarios(directory: str | Path) -> list[dict[str, Any]]`
+- **Parameters:**
+  - directory: path to directory containing `*.json` scenario files (recursive)
+- **Returns:** list of validated scenario dicts, sorted by filename
+- **Errors:** `ValueError` if directory does not exist
 
 ### json_path_exists
 - **Signature:** `json_path_exists(data: Any, path: str) -> bool`
 - **Parameters:**
   - data: nested dict/list/scalar payload
-  - path: dot/bracket path such as `answer.text`, `items[0].id`, or `$.status`
-- **Returns:** True when the path resolves to a present value, including falsey
-  values like `None`, `False`, `0`, or `""`.
+  - path: dot/bracket path such as `patch.data.promises[0].status`
+- **Returns:** True when the path resolves to a present value (including falsey values like `None`, `False`, `0`).
 
 ### json_path_get
-- **Signature:** `json_path_get(data: Any, path: str, default: Any = None) -> Any`
+- **Signature:** `json_path_get(data: Any, path: str) -> Any`
 - **Parameters:** same as `json_path_exists`
-- **Returns:** resolved value, or `default` when the path is absent.
+- **Returns:** resolved value
+- **Errors:** `KeyError` (missing key), `IndexError` (out of range), `TypeError` (wrong container type), `ValueError` (invalid path syntax)
 
 ### LLMJudge
 
 Evaluates semantic properties by asking an injected LLM client for a verdict.
 
-- **Constructor:** `LLMJudge(llm_client: Any, config: Any, *, tier: Any = None)`
-  - llm_client: object exposing `complete(messages, config, tier)`
-  - config: provider configuration passed through to the LLM client
-  - tier: optional model tier passed through to the LLM client
+- **Constructor:** `LLMJudge(llm_client: Any, llm_config: dict[str, Any], tier: str = "commodity")`
+  - llm_client: object exposing `complete(messages, config, tier)` returning plain str
+  - llm_config: provider configuration dict passed through to the LLM client
+  - tier: model tier string passed through to the LLM client
 
-#### judge
-- **Signature:** `async def judge(self, output: Any, property_check: PropertyCheck, scenario: Scenario) -> JudgeResult`
+#### evaluate
+- **Signature:** `async def evaluate(self, response_text: str, criteria: str, pass_instruction: str, fail_instruction: str, context: str = "") -> JudgeResult`
 - **Returns:** `JudgeResult`
-- **Errors:** Judge and LLM failures are captured as failing `JudgeResult`
-  values so a scenario report can include the failure.
+- **Errors:** `ValueError` if LLM response is not plain text or cannot be parsed as `PASS|explanation` / `FAIL|explanation`
 
 The LLM client protocol intentionally matches `toolkit.llm_client.complete`:
 `complete(messages, config, tier)`. Prompt Regression does not import
@@ -58,116 +62,123 @@ The LLM client protocol intentionally matches `toolkit.llm_client.complete`:
 
 Runs scenarios with consumer-provided module dispatch.
 
-- **Constructor:** `ScenarioRunner(module_caller: ModuleCaller, *, judge: LLMJudge | None = None)`
-  - module_caller: async callback that performs project-specific module work
-  - judge: optional semantic judge for LLM-backed property checks
+- **Constructor:** `ScenarioRunner(llm_client: Any, llm_config: dict[str, Any], module_caller: ModuleCaller)`
+  - llm_client: LLM client for judge evaluations
+  - llm_config: provider configuration dict
+  - module_caller: async callback for project-specific module dispatch
 
 ```python
 ModuleCaller = Callable[[str, Any, dict[str, Any]], Awaitable[Any]]
 ```
 
 The callback receives:
-- module name from the scenario
-- scenario input payload
-- scenario metadata/options dict
+- module name (str) from the scenario's `"module"` field
+- input payload (dict) from the scenario's `"input"` field
+- metadata dict (currently `{}`, reserved for future use)
 
-It returns the raw module output. The runner normalizes that output for property
-evaluation and reporting.
+It returns the raw module output. The runner normalizes dataclasses via `asdict()`.
 
 #### run_scenario
-- **Signature:** `async def run_scenario(self, scenario: Scenario) -> ScenarioResult`
-- Runs one scenario, evaluates all properties, and returns structured results.
+- **Signature:** `async def run_scenario(self, scenario: dict[str, Any]) -> ScenarioResult`
+- Runs one scenario, evaluates all properties, returns structured results.
 
 #### run_all
-- **Signature:** `async def run_all(self, scenarios: list[Scenario]) -> RunReport`
-- Runs scenarios in order and returns aggregate counts plus per-scenario
-  results.
+- **Signature:** `async def run_all(self, scenario_dir: str | Path, module_filter: str | None = None) -> RunReport`
+- Loads scenarios from directory, optionally filters by module name, runs each, prints per-scenario PASS/FAIL, returns aggregate report.
 
 ## Types
 
 ```python
-@dataclass
-class Scenario:
-    id: str
-    module: str
-    input: Any
-    properties: list[PropertyCheck]
-    metadata: dict[str, Any]
-
-@dataclass
+@dataclass(frozen=True)
 class PropertyCheck:
-    name: str
-    kind: str
-    path: str | None = None
-    expected: Any = None
-    prompt: str | None = None
-    required: bool = True
+    type: str                          # "json_path_exists" | "json_path_equals" | "llm_judge"
+    description: str
+    path: str | None = None            # for json_path_* checks
+    value: Any | None = None           # for json_path_equals
+    criteria: str | None = None        # for llm_judge
+    pass_instruction: str | None = None
+    fail_instruction: str | None = None
 
-@dataclass
-class JudgeResult:
-    passed: bool
-    verdict: str
-    reason: str
-    raw_response: str
-
-@dataclass
+@dataclass(frozen=True)
 class PropertyResult:
-    property_name: str
     passed: bool
-    reason: str
-    expected: Any = None
-    actual: Any = None
-    judge_result: JudgeResult | None = None
+    description: str
+    expected: Any | None = None
+    actual: Any | None = None
+    judge_explanation: str | None = None
 
-@dataclass
+@dataclass(frozen=True)
 class ScenarioResult:
     scenario_id: str
-    module: str
-    passed: bool
-    output: Any
+    description: str
     properties: list[PropertyResult]
-    error: str | None = None
+    passed: bool
 
-@dataclass
+@dataclass(frozen=True)
 class RunReport:
+    results: list[ScenarioResult]
     total: int
     passed: int
-    failed: int
-    results: list[ScenarioResult]
+
+@dataclass(frozen=True)
+class JudgeResult:
+    verdict: str                       # "PASS" or "FAIL"
+    explanation: str
+    criteria: str
 ```
 
 ## Scenario Format
 
 ```json
 {
-  "id": "generation_contains_claim",
-  "module": "generation",
-  "input": {"topic": "budget policy"},
-  "metadata": {"case": "smoke"},
-  "properties": [
-    {"name": "has_text", "kind": "exists", "path": "text"},
-    {"name": "mentions_budget", "kind": "equals", "path": "topic", "expected": "budget policy"},
-    {"name": "is_neutral", "kind": "llm", "prompt": "Output should be politically neutral."}
+  "scenario_id": "extraction_promise_explicit_001",
+  "module": "extraction",
+  "description": "Explicit promise should create a pending promise entry",
+  "input": {
+    "text": "Alpha promises Beta to support the vote.",
+    "current_state": {},
+    "trigger_type": "message"
+  },
+  "expected_properties": [
+    {
+      "type": "json_path_exists",
+      "description": "A promise entry exists",
+      "path": "patch.data.promises[0]"
+    },
+    {
+      "type": "json_path_equals",
+      "description": "Promise status is pending",
+      "path": "patch.data.promises[0].status",
+      "value": "pending"
+    },
+    {
+      "type": "llm_judge",
+      "description": "Response declines the alliance",
+      "criteria": "The response must not accept the alliance.",
+      "pass_instruction": "Return PASS if the response declines.",
+      "fail_instruction": "Return FAIL if it accepts."
+    }
   ]
 }
 ```
 
-Required fields are `id`, `module`, `input`, and `properties`. `metadata`
-defaults to `{}`.
+Required fields: `scenario_id`, `module`, `description`, `input` (dict), `expected_properties` (list).
 
-## Property Kinds
+## Property Types
 
-- `exists` — `path` must resolve in normalized output.
-- `equals` — `path` must resolve to `expected`.
-- `contains` — resolved value must contain `expected`.
-- `llm` — `judge` must return a passing verdict for the property prompt.
+- `json_path_exists` — `path` must resolve in normalized output. Requires `path`.
+- `json_path_equals` — `path` must resolve to `value`. Requires `path` and `value`.
+- `llm_judge` — judge must return PASS for the criteria. Requires `criteria`, `pass_instruction`, `fail_instruction`. Optional `path` extracts specific text for judging.
 
-Unknown property kinds fail the property with a clear reason.
+Unknown property types raise `ValueError`.
 
-## Outputs
+## Error Handling
 
-Runner output is structured dataclasses, not printed text. Consumers decide how
-to render reports in CI, CLIs, or project dashboards.
+- Scenario load errors (`ValueError`) are raised before execution.
+- Module caller exceptions propagate — the runner does not catch module failures.
+- `json_path_equals` path resolution errors are caught and produce a failed `PropertyResult` with the error as `actual`.
+- `llm_judge` exceptions (LLM network errors, rate limits, malformed responses) are caught and produce a failed `PropertyResult` with `judge error: ...` as `actual`.
+- The runner processes all scenarios even if individual ones fail — `RunReport` contains all results.
 
 ## State
 
@@ -180,16 +191,20 @@ the injected LLM client or the consuming project.
 ```python
 from toolkit.prompt_regression import LLMJudge, ScenarioRunner, load_scenario
 
-async def call_module(module: str, input_payload, metadata: dict):
-    if module == "generation":
-        return await generator.generate(input_payload)
+async def my_module_caller(module: str, input_data, metadata: dict):
+    if module == "extraction":
+        extractor = MyExtractor()
+        return await extractor.extract(input_data["text"], {}, "message")
     raise ValueError(f"Unknown module: {module}")
 
-judge = LLMJudge(llm_client, llm_config, tier=model_tier)
-runner = ScenarioRunner(call_module, judge=judge)
+runner = ScenarioRunner(
+    llm_client=my_llm_client,
+    llm_config=my_config,
+    module_caller=my_module_caller,
+)
 
-scenario = load_scenario("scenarios/generation_smoke.json")
-result = await runner.run_scenario(scenario)
+report = await runner.run_all("tests/scenarios/")
+print(f"{report.passed}/{report.total} passed")
 ```
 
 ## Design Notes
@@ -207,16 +222,10 @@ The judge uses the `complete(messages, config, tier)` protocol but does not
 import `toolkit.llm_client`. This preserves module independence and lets
 consumers wrap, account for, or mock LLM calls.
 
-### Error Handling
-
-Scenario load errors are raised before execution. Per-scenario module,
-property, and judge failures are recorded in `ScenarioResult` /
-`PropertyResult` so a full run can report all failures instead of stopping at
-the first failing scenario.
-
 ---
 
 ## Change History
 | Date | What Changed | Why |
 |------|--------------|-----|
 | 2026-05-28 | Initial ARCH — prompt regression extraction contract | Define reusable boundary before copying diplomat implementation |
+| 2026-05-28 | Updated ARCH to match actual implementation | Worker's initial ARCH used different field names (Scenario dataclass, PropertyCheck.kind, etc.); aligned to diplomat's tested code (dict scenarios, PropertyCheck.type, etc.) |
