@@ -19,20 +19,46 @@ analyst, adversarial, and generation modules.
 
 ### structured_complete
 - **Signature:** `async def structured_complete(llm_client: Any, config: dict[str, Any], tier: str, messages: list[dict[str, str]]) -> str`
+- Low-level primitive. Calls the LLM and returns raw text. No parsing, validation, or retry.
+- Kept for backwards compatibility. Prefer `structured_call` for new code.
+
+### structured_call
+- **Signature:** `async def structured_call(llm_client, config, tier, *, schema, system_prompt, user_prompt, examples=None, max_retries=1) -> StructuredResult`
 - **Parameters:**
   - llm_client: object exposing `complete(messages, config, tier)`
-  - config: provider/client configuration dict passed through unchanged
-  - tier: model tier string passed through unchanged
-  - messages: chat-style message dicts passed through unchanged
-- **Returns:** plain string response from the LLM client
-- **Errors:** `ValueError` if the client response is not a plain string.
+  - config: provider/client configuration dict
+  - tier: model tier string (e.g. "commodity", "quality")
+  - schema: JSON Schema dict to validate against
+  - system_prompt: system-role instructions
+  - user_prompt: user-role prompt with the actual task
+  - examples: optional list of `Example` objects or `{"input": str, "output": dict}` dicts for few-shot prompting
+  - max_retries: retry attempts on validation failure (default 1)
+- **Returns:** `StructuredResult` with `.success`, `.data`, `.raw`, `.retries`, `.error`
+- **Behavior:**
+  1. Assembles the system prompt: instructions + JSON Schema + formatted examples
+  2. Calls the LLM via the injected client
+  3. Parses JSON from the response
+  4. Validates against the schema
+  5. On parse/validation failure: appends the error to the conversation and retries
+  6. On infrastructure failure (network, API error): fails immediately without retry
+- **Errors:** Does not raise. Returns `StructuredResult(success=False, error=...)` on failure.
 
-`llm_client.complete(...)` may return either a string directly or an awaitable
-that resolves to a string. `structured_complete` handles both forms.
+### Example / StructuredResult (types)
 
-The LLM client protocol intentionally matches `toolkit.llm_client.complete`:
-`complete(messages, config, tier)`. Structured LLM does not import
-`toolkit.llm_client`; consumers pass the client/config they want.
+```python
+@dataclass
+class Example:
+    input: str
+    output: dict[str, Any]
+
+@dataclass
+class StructuredResult:
+    success: bool
+    data: dict[str, Any] | None = None
+    raw: str = ""
+    retries: int = 0
+    error: str | None = None
+```
 
 ### parse_json_response
 - **Signature:** `parse_json_response(response_text: str) -> dict[str, Any]`
@@ -96,6 +122,28 @@ parsing, and validation are stateless.
 
 ## Usage Example
 
+### structured_call (recommended)
+
+```python
+from toolkit.structured_llm import structured_call, Example
+
+result = await structured_call(
+    llm_client, config, "commodity",
+    schema=load_schema("schema.json"),
+    system_prompt="Extract game state as JSON.",
+    user_prompt=f"Current state: {state}\n\nMessage: {text}",
+    examples=[
+        Example(input="Beta commits to support Alpha.", output={"promises": [...]}),
+        Example(input="Round 2 begins.", output={}),
+    ],
+    max_retries=1,
+)
+if result.success:
+    use(result.data)
+```
+
+### Low-level primitives
+
 ```python
 from toolkit.structured_llm import (
     load_prompt,
@@ -127,13 +175,12 @@ Consumers then convert `data` into their own domain result types.
 
 ## Out of Scope
 
-- Prompt construction and message templates.
-- Domain-specific result dataclasses.
 - JSON repair, markdown fence stripping, or partial JSON extraction.
-- LLM retries, rate limits, accounting, or provider selection.
+- LLM rate limits or provider selection.
 - Importing or wrapping `toolkit.llm_client`.
 
 ## Change History
 | Date | What Changed | Why |
 |------|--------------|-----|
 | 2026-05-28 | Initial ARCH - structured LLM extraction contract | Define reusable boundary before implementation |
+| 2026-05-28 | Added structured_call, Example, StructuredResult | High-level workflow: prompt assembly + schema injection + few-shot examples + auto-retry on validation failure |

@@ -43,9 +43,16 @@ class CostAccountant:
         self,
         ledger_path: Path,
         pricing: Optional[Dict[str, ModelPricing]] = None,
+        default_budget: Optional[CostBudget] = None,
     ):
         self.ledger_path = Path(ledger_path)
         self.pricing = dict(DEFAULT_PRICING if pricing is None else pricing)
+        self.default_budget = default_budget or CostBudget(
+            operation_name="default",
+            operation_budget_usd=25.0,
+            session_budget_usd=25.0,
+            per_call_max_usd=2.0,
+        )
         self._session_total = 0.0
         self._operation_totals: Dict[str, float] = {}
 
@@ -79,10 +86,10 @@ class CostAccountant:
         expected_output_tokens: int = 1000,
     ) -> CostEstimate:
         """Estimate cost for one call from token counts."""
-        if model not in self.pricing:
-            raise UnknownModelError(model)
-
-        pricing = self.pricing[model]
+        pricing = self.pricing.get(model)
+        if pricing is None:
+            # Fall back to the highest known pricing for budget safety.
+            pricing = ModelPricing(input_per_mtok=15.0, output_per_mtok=75.0)
         input_cost_usd = input_tokens * pricing.input_per_mtok / 1_000_000
         output_cost_usd = (
             expected_output_tokens * pricing.output_per_mtok / 1_000_000
@@ -136,9 +143,10 @@ class CostAccountant:
         messages: List[Message],
         config: LLMConfig,
         tier: ModelTier,
-        budget: CostBudget,
+        budget: Optional[CostBudget] = None,
     ) -> LLMResponse:
         """Budget-check, execute, and ledger an LLM client completion."""
+        budget = budget or self.default_budget
         model = self._resolve_model(config, tier)
         input_tokens = self._estimate_input_tokens(messages)
         estimate = self.estimate_cost(

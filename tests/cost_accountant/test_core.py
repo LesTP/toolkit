@@ -142,10 +142,13 @@ class TestEstimation:
         assert estimate.output_cost_usd == pytest.approx(15.0)
         assert estimate.total_usd == pytest.approx(21.0)
 
-    def test_estimate_cost_unknown_model_raises(self, tmp_path):
-        with pytest.raises(UnknownModelError) as exc_info:
-            CostAccountant(tmp_path / "ledger.jsonl").estimate_cost("missing", 1)
-        assert exc_info.value.model == "missing"
+    def test_estimate_cost_unknown_model_uses_fallback_pricing(self, tmp_path):
+        estimate = CostAccountant(tmp_path / "ledger.jsonl").estimate_cost(
+            "unknown-model", 1_000_000
+        )
+        # Falls back to highest known pricing: $15.0/Mtok input, $75.0/Mtok output
+        assert estimate.input_cost_usd == pytest.approx(15.0)
+        assert estimate.total_usd > 0
 
     def test_estimate_batch_returns_call_breakdown(self, tmp_path):
         batch = CostAccountant(tmp_path / "ledger.jsonl").estimate_batch(

@@ -13,10 +13,23 @@ class ModelPricing:
 
 
 DEFAULT_PRICING: Dict[str, ModelPricing] = {
+    # Anthropic
     "claude-sonnet-4-20250514": ModelPricing(3.0, 15.0),
     "claude-sonnet-4-6": ModelPricing(3.0, 15.0),
     "claude-haiku-4-5": ModelPricing(0.25, 1.25),
     "claude-opus-4": ModelPricing(15.0, 75.0),
+    # OpenAI
+    "gpt-4.1": ModelPricing(2.0, 8.0),
+    "gpt-4.1-mini": ModelPricing(0.4, 1.6),
+    "gpt-4.1-nano": ModelPricing(0.1, 0.4),
+    "gpt-4o": ModelPricing(2.5, 10.0),
+    "gpt-4o-mini": ModelPricing(0.15, 0.6),
+    "gpt-5.5": ModelPricing(2.0, 8.0),
+    "gpt-5.4": ModelPricing(2.0, 8.0),
+    "gpt-5.4-mini": ModelPricing(0.4, 1.6),
+    "o3": ModelPricing(2.0, 8.0),
+    "o3-mini": ModelPricing(1.1, 4.4),
+    "o4-mini": ModelPricing(1.1, 4.4),
 }
 
 

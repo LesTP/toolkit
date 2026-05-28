@@ -8,9 +8,12 @@ import json
 import pytest
 
 from toolkit.structured_llm import (
+    Example,
+    StructuredResult,
     load_prompt,
     load_schema,
     parse_json_response,
+    structured_call,
     structured_complete,
     validate_json_schema,
 )
@@ -166,5 +169,148 @@ def test_structured_complete_rejects_non_text_response():
 
         with pytest.raises(ValueError, match="plain text"):
             await structured_complete(client, {}, "commodity", [])
+
+    asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
+# structured_call tests
+# ---------------------------------------------------------------------------
+
+SIMPLE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["status"],
+    "properties": {
+        "status": {"enum": ["ok", "error"]},
+        "detail": {"type": "string"},
+    },
+}
+
+
+class SequentialFakeClient:
+    """Returns responses from a list, one per call."""
+
+    def __init__(self, responses: list[str]) -> None:
+        self.responses = list(responses)
+        self.calls: list[dict] = []
+
+    def complete(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.responses.pop(0)
+
+
+def test_structured_call_success_on_first_attempt():
+    async def _run():
+        client = SyncFakeClient('{"status": "ok"}')
+        result = await structured_call(
+            client, {}, "commodity",
+            schema=SIMPLE_SCHEMA,
+            system_prompt="Return JSON.",
+            user_prompt="What is the status?",
+        )
+        assert result.success
+        assert result.data == {"status": "ok"}
+        assert result.retries == 0
+        assert result.error is None
+
+    asyncio.run(_run())
+
+
+def test_structured_call_retries_on_validation_failure():
+    async def _run():
+        client = SequentialFakeClient([
+            '{"status": "bad"}',       # fails enum validation
+            '{"status": "ok"}',        # passes
+        ])
+        result = await structured_call(
+            client, {}, "commodity",
+            schema=SIMPLE_SCHEMA,
+            system_prompt="Return JSON.",
+            user_prompt="What is the status?",
+            max_retries=1,
+        )
+        assert result.success
+        assert result.data == {"status": "ok"}
+        assert result.retries == 1
+        assert len(client.calls) == 2
+        # The retry message should contain the validation error.
+        retry_messages = client.calls[1]["messages"]
+        assert any("failed validation" in m["content"] for m in retry_messages)
+
+    asyncio.run(_run())
+
+
+def test_structured_call_fails_after_exhausting_retries():
+    async def _run():
+        client = SyncFakeClient('{"status": "bad"}')  # always invalid
+        result = await structured_call(
+            client, {}, "commodity",
+            schema=SIMPLE_SCHEMA,
+            system_prompt="Return JSON.",
+            user_prompt="What is the status?",
+            max_retries=1,
+        )
+        assert not result.success
+        assert result.data is None
+        assert result.retries == 1
+        assert result.error is not None
+        assert "bad" in result.error or "not one of" in result.error
+
+    asyncio.run(_run())
+
+
+def test_structured_call_no_retries():
+    async def _run():
+        client = SyncFakeClient('not json')
+        result = await structured_call(
+            client, {}, "commodity",
+            schema=SIMPLE_SCHEMA,
+            system_prompt="Return JSON.",
+            user_prompt="go",
+            max_retries=0,
+        )
+        assert not result.success
+        assert result.retries == 0
+
+    asyncio.run(_run())
+
+
+def test_structured_call_includes_examples_in_prompt():
+    async def _run():
+        client = SyncFakeClient('{"status": "ok"}')
+        result = await structured_call(
+            client, {}, "commodity",
+            schema=SIMPLE_SCHEMA,
+            system_prompt="Return JSON.",
+            user_prompt="go",
+            examples=[
+                {"input": "Is it ok?", "output": {"status": "ok"}},
+                Example(input="Is it bad?", output={"status": "error"}),
+            ],
+        )
+        assert result.success
+        # Verify examples were in the system prompt.
+        system_msg = client.calls[0]["messages"][0]["content"]
+        assert "Example 1:" in system_msg
+        assert "Example 2:" in system_msg
+        assert '"status": "ok"' in system_msg
+        assert "Is it bad?" in system_msg
+
+    asyncio.run(_run())
+
+
+def test_structured_call_schema_in_system_prompt():
+    async def _run():
+        client = SyncFakeClient('{"status": "ok"}')
+        await structured_call(
+            client, {}, "commodity",
+            schema=SIMPLE_SCHEMA,
+            system_prompt="You are a helper.",
+            user_prompt="go",
+        )
+        system_msg = client.calls[0]["messages"][0]["content"]
+        assert "JSON Schema" in system_msg
+        assert '"status"' in system_msg
 
     asyncio.run(_run())

@@ -245,27 +245,31 @@ async stop() -> None
 ```python
 class CostAccountant:
     def __init__(self, ledger_path: Path,
-                 pricing: dict[str, ModelPricing] | None = None) -> None
+                 pricing: dict[str, ModelPricing] | None = None,
+                 default_budget: CostBudget | None = None) -> None
 
 @dataclass
 class CostBudget:
-    per_call_usd: float | None = None
-    operation_usd: float | None = None
-    session_usd: float | None = None
-    abort_on_rate_limit: bool = False
-    abort_on_spending_cap: bool = False
+    operation_name: str
+    operation_budget_usd: float
+    session_budget_usd: float = 100.0
+    per_call_max_usd: float = 1.0
+    abort_on_rate_limit: bool = True
+    abort_on_spending_cap: bool = True
 
 @dataclass
 class CostEstimate:
     model: str
     input_tokens: int
-    output_tokens: int
-    estimated_cost_usd: float
+    estimated_output_tokens: int
+    input_cost_usd: float
+    output_cost_usd: float
+    total_usd: float
 
 @dataclass
 class ModelPricing:
-    input_per_million: float
-    output_per_million: float
+    input_per_mtok: float
+    output_per_mtok: float
 
 class BudgetExceededError(CostAccountantError): ...
 class RateLimitAbortError(CostAccountantError): ...
@@ -275,11 +279,18 @@ class SpendingCapAbortError(CostAccountantError): ...
 ### Methods (CostAccountant)
 
 ```python
-complete(messages: list[Message], config: LLMConfig, tier: ModelTier, *,
-         budget: CostBudget | None = None, operation: str | None = None) -> LLMResponse
-estimate_cost(model: str, input_tokens: int, output_tokens: int) -> CostEstimate
+complete(messages: list[Message], config: LLMConfig, tier: ModelTier,
+         budget: CostBudget | None = None) -> LLMResponse
+estimate_cost(model: str, input_tokens: int,
+              expected_output_tokens: int = 1000) -> CostEstimate
 report(since: datetime | None = None) -> CostReport
+session_total: float  # property — cumulative spend this session
 ```
+
+### Notes
+- `budget` is optional in `complete()`. Falls back to `default_budget` from constructor. Constructor default: $25 session / $25 operation / $2 per call.
+- Unknown models use conservative fallback pricing ($15/$75 per Mtok) — matches the most expensive known model.
+- Default pricing includes Anthropic (claude-sonnet-4-6, claude-haiku-4-5, claude-opus-4) and OpenAI (gpt-4.1, gpt-4.1-mini, gpt-4o, gpt-5.5, o3, o4-mini, etc.).
 
 ---
 
@@ -359,9 +370,34 @@ class ScenarioRunner:
 ## toolkit.structured_llm
 **Consumers:** Diplomat
 
+### Types
+
+```python
+@dataclass
+class Example:
+    input: str
+    output: dict[str, Any]
+
+@dataclass
+class StructuredResult:
+    success: bool
+    data: dict[str, Any] | None = None
+    raw: str = ""
+    retries: int = 0
+    error: str | None = None
+```
+
 ### Functions
 
 ```python
+# High-level: prompt assembly + schema injection + examples + validate + retry
+async structured_call(llm_client: Any, config: dict[str, Any], tier: str, *,
+                      schema: dict[str, Any], system_prompt: str,
+                      user_prompt: str,
+                      examples: list[Example] | list[dict] | None = None,
+                      max_retries: int = 1) -> StructuredResult
+
+# Low-level primitives (kept for backwards compatibility)
 async structured_complete(llm_client: Any, config: dict[str, Any], tier: str,
                            messages: list[dict[str, str]]) -> str
 parse_json_response(response_text: str) -> dict[str, Any]
