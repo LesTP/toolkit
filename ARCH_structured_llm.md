@@ -67,9 +67,11 @@ class StructuredResult:
 - **Returns:** parsed JSON object as a dict
 - **Errors:** `ValueError` if the response is invalid JSON or parses to a non-object value.
 
-The function does not extract JSON from surrounding prose. Callers that permit
-markdown fences or explanatory text must normalize the response before calling
-this helper.
+Before parsing, the helper strips a single surrounding Markdown code fence
+(``` ```json ... ``` `` or `` ``` ... ``` ``) when the *entire* response is wrapped in one.
+This tolerates Anthropic and Google models that wrap JSON in fences even when
+instructed to return raw JSON. It does not extract JSON from arbitrary prose:
+responses with explanatory text outside or instead of the fence still raise.
 
 ### validate_json_schema
 - **Signature:** `validate_json_schema(data: dict[str, Any], schema: dict[str, Any], label: str = "") -> None`
@@ -175,7 +177,9 @@ Consumers then convert `data` into their own domain result types.
 
 ## Out of Scope
 
-- JSON repair, markdown fence stripping, or partial JSON extraction.
+- JSON repair, partial JSON extraction, or extraction from arbitrary prose.
+  (A surrounding Markdown code fence around the whole response IS stripped,
+  but no other extraction is attempted.)
 - LLM rate limits or provider selection.
 - Importing or wrapping `toolkit.llm_client`.
 
@@ -183,4 +187,5 @@ Consumers then convert `data` into their own domain result types.
 | Date | What Changed | Why |
 |------|--------------|-----|
 | 2026-05-28 | Initial ARCH - structured LLM extraction contract | Define reusable boundary before implementation |
+| 2026-05-29 | `parse_json_response` strips a surrounding Markdown code fence before parsing | Anthropic and Google models wrap JSON in `` ```json ... ``` `` even when instructed to return raw JSON; without stripping, retries silently exhaust and downstream modules see nothing |
 | 2026-05-28 | Added structured_call, Example, StructuredResult | High-level workflow: prompt assembly + schema injection + few-shot examples + auto-retry on validation failure |

@@ -1,5 +1,32 @@
 # Toolkit — Dev Log
 
+## 2026-05-29 — structured_llm: strip Markdown code fences in parse_json_response
+
+**Module:** structured_llm | **Regime:** Patch | **Result:** 19 tests passing (no regression)
+
+**Contract changes:** `ARCH_structured_llm.md` — `parse_json_response` now strips a single surrounding Markdown code fence (` ```json ... ``` ` or ` ``` ... ``` `) before parsing. Updated "Out of Scope" to clarify that fence stripping IS done but partial extraction from prose is not.
+
+### What was built
+- `_strip_code_fences(text)` helper using a `^...$` DOTALL regex that requires the fence to wrap the entire response (rejects "Here is the JSON: { ... }" style outputs).
+- `parse_json_response` calls `_strip_code_fences` before `json.loads`.
+- No-op for OpenAI responses (which return raw JSON).
+
+### Why
+Anthropic (Claude) and Google (Gemini) wrap JSON output in ` ```json ... ``` ` even when the system prompt explicitly requests raw JSON. Before this fix, `structured_call`'s retry loop saw `json.loads` fail silently, retried, hit `max_retries`, and propagated `success=False` with no visible LLM error in the call log. Downstream Diplomat modules received nothing despite the LLM having generated valid (if wrapped) content.
+
+Surfaced during Diplomat's Run 8 multi-provider self-play (3 providers playing the same scenario; before the fix only the OpenAI faction's messages reached the transcript).
+
+### What this is NOT
+- No JSON repair (mismatched braces, trailing commas, etc. still fail).
+- No partial extraction from prose. Responses like "I propose this: `{...}`" still raise.
+- No provider-specific normalization elsewhere. The fence-strip is the only response munging in this layer.
+
+### Verification
+- `pytest tests/structured_llm/` — 19 passed.
+- Diplomat Run 8 (gpt-4.1-mini + claude-haiku-4-5 + gemini-2.5-flash on the Water Rights scenario) — all three providers now reach the transcript; 11/12 expected messages exchanged (1 lost to a Google free-tier rate limit, unrelated).
+
+---
+
 ## 2026-05-17 — Cost Accountant Phase 1 complete
 
 **Module:** Cost Accountant | **Phase:** 1 | **Regime:** Build | **Result:** 28 tests passing

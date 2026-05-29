@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from inspect import isawaitable
 from pathlib import Path
@@ -212,10 +213,30 @@ async def structured_complete(
     return response
 
 
+_CODE_FENCE_RE = re.compile(
+    r"^\s*```(?:json|JSON)?\s*\n?(?P<body>.*?)\n?\s*```\s*$",
+    re.DOTALL,
+)
+
+
+def _strip_code_fences(text: str) -> str:
+    """Strip a single Markdown code fence wrapping the entire response.
+
+    Anthropic and Google models often wrap JSON output in ```json ... ```
+    even when explicitly instructed to return raw JSON. This is a no-op for
+    OpenAI responses which return raw JSON.
+    """
+    match = _CODE_FENCE_RE.match(text)
+    if match:
+        return match.group("body")
+    return text
+
+
 def parse_json_response(response_text: str) -> dict[str, Any]:
     """Parse an LLM response as a JSON object."""
+    cleaned = _strip_code_fences(response_text)
     try:
-        data = json.loads(response_text)
+        data = json.loads(cleaned)
     except json.JSONDecodeError as error:
         raise ValueError(f"LLM response is not valid JSON: {error}") from error
 
