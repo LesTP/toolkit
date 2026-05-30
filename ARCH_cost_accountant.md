@@ -66,10 +66,11 @@ class CostReport:
 
 ### Constructor
 
-- **Signature:** `CostAccountant(ledger_path: Path, pricing: dict[str, ModelPricing] | None = None)`
+- **Signature:** `CostAccountant(ledger_path: Path, pricing: dict[str, ModelPricing] | None = None, default_budget: CostBudget | None = None)`
 - **Parameters:**
   - ledger_path: Path — where to write the append-only JSONL ledger. Created if missing.
   - pricing: optional model pricing override. Defaults to built-in table.
+  - default_budget: optional default budget used when `complete()` is called without an explicit budget. Defaults to $25 session / $25 operation / $2 per call.
 - **Errors:** none
 
 ```python
@@ -82,17 +83,30 @@ class ModelPricing:
 Built-in pricing (updatable):
 ```python
 DEFAULT_PRICING = {
+    # Anthropic
     "claude-sonnet-4-20250514": ModelPricing(3.0, 15.0),
     "claude-sonnet-4-6":       ModelPricing(3.0, 15.0),
     "claude-haiku-4-5":        ModelPricing(0.25, 1.25),
     "claude-opus-4":           ModelPricing(15.0, 75.0),
+    # OpenAI
+    "gpt-4.1":                ModelPricing(2.0, 8.0),
+    "gpt-4.1-mini":           ModelPricing(0.4, 1.6),
+    "gpt-4.1-nano":           ModelPricing(0.1, 0.4),
+    "gpt-4o":                 ModelPricing(2.5, 10.0),
+    "gpt-4o-mini":            ModelPricing(0.15, 0.6),
+    "gpt-5.5":                ModelPricing(2.0, 8.0),
+    "o3":                     ModelPricing(2.0, 8.0),
+    "o3-mini":                ModelPricing(1.1, 4.4),
+    "o4-mini":                ModelPricing(1.1, 4.4),
 }
 ```
 
+Unknown models (not in the pricing table) use conservative fallback pricing of $15/$75 per Mtok (matching the most expensive known model) rather than raising an error. This ensures budget enforcement is never bypassed by a model name mismatch.
+
 ### complete
 
-- **Signature:** `complete(*, messages: list[Message], config: LLMConfig, tier: ModelTier, budget: CostBudget) -> LLMResponse`
-- **Parameters:** same as `llm_client.complete()` plus `budget`
+- **Signature:** `complete(*, messages: list[Message], config: LLMConfig, tier: ModelTier, budget: CostBudget | None = None) -> LLMResponse`
+- **Parameters:** same as `llm_client.complete()` plus optional `budget` (falls back to `default_budget` from constructor)
 - **Returns:** `LLMResponse` (from `toolkit/llm_client`)
 - **Errors:**
   - `BudgetExceededError` — estimated cost exceeds per-call, operation, or session budget
@@ -122,7 +136,7 @@ DEFAULT_PRICING = {
   - input_tokens: known or estimated input token count
   - expected_output_tokens: estimated output tokens (default 1000)
 - **Returns:** `CostEstimate`
-- **Errors:** `UnknownModelError` if model not in pricing table
+- **Errors:** None — unknown models use conservative fallback pricing ($15/$75 per Mtok)
 
 ### estimate_batch
 
@@ -132,7 +146,7 @@ DEFAULT_PRICING = {
   - calls: list of `{"input_chars": int, "label": str}` — one per expected LLM call
   - expected_output_tokens_per_call: default output estimate per call
 - **Returns:** `BatchEstimate` with per-call breakdown and total
-- **Errors:** `UnknownModelError`
+- **Errors:** None — unknown models use fallback pricing
 
 ### report
 
@@ -250,7 +264,7 @@ CostAccountantError (base)
 │   └── SessionBudgetError     — session cumulative exceeded
 ├── SpendingCapAbortError      — API reported account spending cap reached
 ├── RateLimitAbortError        — API rate limit and abort_on_rate_limit=True
-└── UnknownModelError          — model not found in pricing table
+└── UnknownModelError          — model not found in pricing table (kept for backwards compat; estimate_cost no longer raises it)
 ```
 
 ## Token Estimation
