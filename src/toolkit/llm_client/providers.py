@@ -6,6 +6,8 @@ AnthropicProvider as the concrete implementation, and a
 factory function to create providers from config.
 """
 
+import random
+import time
 from abc import ABC, abstractmethod
 
 from toolkit.llm_client.types import (
@@ -307,3 +309,148 @@ def complete(
         max_tokens=config.max_tokens,
         temperature=config.temperature,
     )
+
+
+# ---------------------------------------------------------------------------
+# Retry-with-backoff wrapper
+# ---------------------------------------------------------------------------
+
+
+# HTTP status codes that should NOT be retried. Everything else is treated as
+# transient. 429 (rate limit) and 5xx (server error) are explicitly retryable.
+# Network errors (status_code is None) are also retryable.
+_NON_RETRYABLE_STATUS_CODES = frozenset({400, 401, 403, 404, 422})
+
+
+def _is_retryable_api_error(exc: LLMAPIError) -> bool:
+    """Determine if an LLMAPIError represents a transient failure.
+
+    Retryable:
+    - status_code is None (network/connection error)
+    - status_code == 429 (rate limit)
+    - status_code >= 500 (server error)
+
+    Not retryable (client error):
+    - 400, 401, 403, 404, 422 (bad request, auth, not found, validation)
+
+    Other 4xx codes are treated as non-retryable by default.
+    """
+    if exc.status_code is None:
+        return True
+    if exc.status_code == 429:
+        return True
+    if exc.status_code >= 500:
+        return True
+    return False
+
+
+def _compute_backoff_delay(
+    attempt: int,
+    base_delay: float,
+    max_delay: float,
+    jitter: float,
+    retry_after: float | None,
+) -> float:
+    """Compute next-attempt delay in seconds.
+
+    If retry_after is set (from a 429 response's Retry-After header), honor
+    it with a small jitter added on top.
+
+    Otherwise use exponential backoff: base_delay * 2^attempt + jitter.
+    Capped at max_delay.
+    """
+    if retry_after is not None and retry_after > 0:
+        return min(retry_after + random.uniform(0, jitter), max_delay)
+    delay = base_delay * (2 ** attempt)
+    delay += random.uniform(0, jitter * delay)
+    return min(delay, max_delay)
+
+
+def complete_with_retry(
+    messages: list[Message],
+    config: LLMConfig,
+    tier: ModelTier = ModelTier.DEFAULT,
+    *,
+    max_attempts: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 30.0,
+    jitter: float = 0.25,
+    retry_on_empty: bool = True,
+) -> LLMResponse:
+    """complete() with exponential backoff retry on transient failures.
+
+    Wraps :func:`complete` with retry logic for the kind of transient
+    failures that are common at scale: rate limits, server errors, network
+    blips, and (optionally) empty responses from safety filters.
+
+    Retries on:
+    - LLMAPIError with status_code == 429 (rate limit)
+    - LLMAPIError with status_code >= 500 (server error)
+    - LLMAPIError with status_code is None (network error)
+    - LLMResponseError (empty response — often transient, especially Gemini
+      safety-filter cases). Set ``retry_on_empty=False`` to disable.
+
+    Does NOT retry on:
+    - LLMAPIError with status_code in {400, 401, 403, 404, 422} (client errors)
+    - Other exceptions (e.g., ValueError from config issues)
+
+    Honors the Retry-After header from API responses when present (Anthropic
+    and OpenAI providers populate ``LLMAPIError.retry_after`` from the
+    header). Otherwise uses exponential backoff with jitter.
+
+    Args:
+        messages: Conversation messages (same as :func:`complete`).
+        config: Provider configuration.
+        tier: Quality tier to select the model.
+        max_attempts: Total attempts including the first call (default 3 —
+            meaning up to 2 retries after the initial attempt).
+        base_delay: Base delay for exponential backoff in seconds (default 1.0).
+        max_delay: Cap on any single backoff delay in seconds (default 30.0).
+        jitter: Random jitter added on top of computed delays as a fraction
+            of the delay (default 0.25 = up to 25% jitter).
+        retry_on_empty: If True (default), retry on LLMResponseError. Set
+            False if you want empty responses to fail fast (e.g., when an
+            empty response is itself informative for your caller).
+
+    Returns:
+        LLMResponse on success.
+
+    Raises:
+        LLMAPIError: Final attempt failed with a retryable or non-retryable
+            API error.
+        LLMResponseError: Final attempt returned empty (and retried if
+            ``retry_on_empty``).
+        ValueError: Config-level error (not retried).
+    """
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be >= 1")
+
+    last_exc: Exception | None = None
+
+    for attempt in range(max_attempts):
+        try:
+            return complete(messages, config, tier)
+        except LLMAPIError as exc:
+            if not _is_retryable_api_error(exc):
+                raise
+            last_exc = exc
+            if attempt < max_attempts - 1:
+                delay = _compute_backoff_delay(
+                    attempt, base_delay, max_delay, jitter,
+                    retry_after=exc.retry_after,
+                )
+                time.sleep(delay)
+        except LLMResponseError as exc:
+            if not retry_on_empty:
+                raise
+            last_exc = exc
+            if attempt < max_attempts - 1:
+                delay = _compute_backoff_delay(
+                    attempt, base_delay, max_delay, jitter,
+                    retry_after=None,
+                )
+                time.sleep(delay)
+
+    # All attempts exhausted; re-raise the last exception we saw.
+    assert last_exc is not None  # invariant: loop must have produced exc
+    raise last_exc

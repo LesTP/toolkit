@@ -12,6 +12,7 @@ from toolkit.llm_client import (
     ModelTier,
     TokenUsage,
     complete,
+    complete_with_retry,
     create_provider,
 )
 
@@ -348,3 +349,320 @@ class TestErrors:
     def test_response_error_is_exception(self):
         with pytest.raises(LLMResponseError):
             raise LLMResponseError("test")
+
+
+# ---------------------------------------------------------------------------
+# complete_with_retry
+# ---------------------------------------------------------------------------
+
+
+class FlakeyProvider(LLMProvider):
+    """Provider that raises a configured sequence of exceptions, then succeeds.
+
+    The exceptions list is consumed front-to-back. If an entry is None, that
+    attempt returns a successful response. If the list is exhausted, all
+    further calls succeed.
+    """
+
+    def __init__(self, exceptions: list[Exception | None]):
+        self._exceptions = list(exceptions)
+        self.call_count = 0
+
+    def call(
+        self,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int,
+        temperature: float = 0.7,
+    ) -> LLMResponse:
+        self.call_count += 1
+        if self._exceptions:
+            exc = self._exceptions.pop(0)
+            if exc is not None:
+                raise exc
+        return LLMResponse(
+            content="ok",
+            model=model,
+            provider="stub",
+            token_usage=TokenUsage(input_tokens=1, output_tokens=1),
+        )
+
+
+def _retry_config() -> LLMConfig:
+    return LLMConfig(
+        provider="stub",
+        api_key="key",
+        models={"default": "test-model"},
+    )
+
+
+def _no_sleep(monkeypatch):
+    """Patch time.sleep so retries don't actually wait during tests."""
+    monkeypatch.setattr(
+        "toolkit.llm_client.providers.time.sleep",
+        lambda _: None,
+    )
+
+
+class TestCompleteWithRetry:
+    def test_succeeds_on_first_try(self, monkeypatch):
+        _no_sleep(monkeypatch)
+        provider = FlakeyProvider([])
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.create_provider",
+            lambda config: provider,
+        )
+        result = complete_with_retry(
+            [Message(role="user", content="hi")], _retry_config()
+        )
+        assert result.content == "ok"
+        assert provider.call_count == 1
+
+    def test_retries_on_429(self, monkeypatch):
+        _no_sleep(monkeypatch)
+        provider = FlakeyProvider([
+            LLMAPIError("rate limited", status_code=429, retry_after=0.01),
+            None,
+        ])
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.create_provider",
+            lambda config: provider,
+        )
+        result = complete_with_retry(
+            [Message(role="user", content="hi")], _retry_config()
+        )
+        assert result.content == "ok"
+        assert provider.call_count == 2
+
+    def test_retries_on_5xx(self, monkeypatch):
+        _no_sleep(monkeypatch)
+        provider = FlakeyProvider([
+            LLMAPIError("server error", status_code=503),
+            None,
+        ])
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.create_provider",
+            lambda config: provider,
+        )
+        result = complete_with_retry(
+            [Message(role="user", content="hi")], _retry_config()
+        )
+        assert provider.call_count == 2
+        assert result.content == "ok"
+
+    def test_retries_on_network_error(self, monkeypatch):
+        """status_code=None means network error — should retry."""
+        _no_sleep(monkeypatch)
+        provider = FlakeyProvider([
+            LLMAPIError("connection refused"),  # status_code=None
+            None,
+        ])
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.create_provider",
+            lambda config: provider,
+        )
+        result = complete_with_retry(
+            [Message(role="user", content="hi")], _retry_config()
+        )
+        assert provider.call_count == 2
+        assert result.content == "ok"
+
+    def test_retries_on_empty_response(self, monkeypatch):
+        _no_sleep(monkeypatch)
+        provider = FlakeyProvider([
+            LLMResponseError("empty"),
+            None,
+        ])
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.create_provider",
+            lambda config: provider,
+        )
+        result = complete_with_retry(
+            [Message(role="user", content="hi")], _retry_config()
+        )
+        assert provider.call_count == 2
+        assert result.content == "ok"
+
+    def test_does_not_retry_on_empty_when_disabled(self, monkeypatch):
+        _no_sleep(monkeypatch)
+        provider = FlakeyProvider([LLMResponseError("empty")])
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.create_provider",
+            lambda config: provider,
+        )
+        with pytest.raises(LLMResponseError):
+            complete_with_retry(
+                [Message(role="user", content="hi")],
+                _retry_config(),
+                retry_on_empty=False,
+            )
+        assert provider.call_count == 1
+
+    def test_does_not_retry_on_401(self, monkeypatch):
+        _no_sleep(monkeypatch)
+        provider = FlakeyProvider([
+            LLMAPIError("unauthorized", status_code=401),
+        ])
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.create_provider",
+            lambda config: provider,
+        )
+        with pytest.raises(LLMAPIError) as exc_info:
+            complete_with_retry(
+                [Message(role="user", content="hi")], _retry_config()
+            )
+        assert exc_info.value.status_code == 401
+        assert provider.call_count == 1
+
+    def test_does_not_retry_on_400(self, monkeypatch):
+        _no_sleep(monkeypatch)
+        provider = FlakeyProvider([
+            LLMAPIError("bad request", status_code=400),
+        ])
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.create_provider",
+            lambda config: provider,
+        )
+        with pytest.raises(LLMAPIError):
+            complete_with_retry(
+                [Message(role="user", content="hi")], _retry_config()
+            )
+        assert provider.call_count == 1
+
+    def test_exhausts_all_attempts_and_raises_last(self, monkeypatch):
+        _no_sleep(monkeypatch)
+        provider = FlakeyProvider([
+            LLMAPIError("rate 1", status_code=429),
+            LLMAPIError("rate 2", status_code=429),
+            LLMAPIError("rate 3 final", status_code=429),
+        ])
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.create_provider",
+            lambda config: provider,
+        )
+        with pytest.raises(LLMAPIError) as exc_info:
+            complete_with_retry(
+                [Message(role="user", content="hi")], _retry_config(),
+                max_attempts=3,
+            )
+        # Last attempt's exception is the one re-raised
+        assert "rate 3 final" in str(exc_info.value)
+        assert provider.call_count == 3
+
+    def test_max_attempts_one_is_no_retry(self, monkeypatch):
+        _no_sleep(monkeypatch)
+        provider = FlakeyProvider([
+            LLMAPIError("rate", status_code=429),
+        ])
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.create_provider",
+            lambda config: provider,
+        )
+        with pytest.raises(LLMAPIError):
+            complete_with_retry(
+                [Message(role="user", content="hi")], _retry_config(),
+                max_attempts=1,
+            )
+        assert provider.call_count == 1
+
+    def test_max_attempts_zero_raises_value_error(self):
+        with pytest.raises(ValueError):
+            complete_with_retry(
+                [Message(role="user", content="hi")], _retry_config(),
+                max_attempts=0,
+            )
+
+    def test_honors_retry_after_header(self, monkeypatch):
+        """When LLMAPIError has retry_after, sleep with that value."""
+        sleep_calls: list[float] = []
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.time.sleep",
+            lambda d: sleep_calls.append(d),
+        )
+        # Suppress jitter randomness by patching random.uniform to 0
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.random.uniform",
+            lambda a, b: 0.0,
+        )
+        provider = FlakeyProvider([
+            LLMAPIError("rate", status_code=429, retry_after=5.0),
+            None,
+        ])
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.create_provider",
+            lambda config: provider,
+        )
+        complete_with_retry(
+            [Message(role="user", content="hi")], _retry_config(),
+        )
+        assert sleep_calls == [5.0]
+
+    def test_exponential_backoff_without_retry_after(self, monkeypatch):
+        sleep_calls: list[float] = []
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.time.sleep",
+            lambda d: sleep_calls.append(d),
+        )
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.random.uniform",
+            lambda a, b: 0.0,
+        )
+        provider = FlakeyProvider([
+            LLMAPIError("err", status_code=500),
+            LLMAPIError("err", status_code=500),
+            None,
+        ])
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.create_provider",
+            lambda config: provider,
+        )
+        complete_with_retry(
+            [Message(role="user", content="hi")], _retry_config(),
+            max_attempts=3,
+            base_delay=1.0,
+        )
+        # attempt 0 failed → delay = 1.0 * 2^0 = 1.0
+        # attempt 1 failed → delay = 1.0 * 2^1 = 2.0
+        assert sleep_calls == [1.0, 2.0]
+
+    def test_delay_capped_at_max(self, monkeypatch):
+        sleep_calls: list[float] = []
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.time.sleep",
+            lambda d: sleep_calls.append(d),
+        )
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.random.uniform",
+            lambda a, b: 0.0,
+        )
+        provider = FlakeyProvider([
+            LLMAPIError("err", status_code=500),
+            None,
+        ])
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.create_provider",
+            lambda config: provider,
+        )
+        complete_with_retry(
+            [Message(role="user", content="hi")], _retry_config(),
+            base_delay=100.0,
+            max_delay=5.0,
+        )
+        assert sleep_calls == [5.0]
+
+    def test_value_error_not_retried(self, monkeypatch):
+        """Config-level errors (e.g. tier not in models) must not be retried."""
+        _no_sleep(monkeypatch)
+        config = LLMConfig(
+            provider="stub",
+            api_key="key",
+            models={"default": "m"},
+        )
+        # Tier "quality" not in models — complete() raises ValueError
+        with pytest.raises(ValueError):
+            complete_with_retry(
+                [Message(role="user", content="hi")],
+                config,
+                tier=ModelTier.QUALITY,
+            )

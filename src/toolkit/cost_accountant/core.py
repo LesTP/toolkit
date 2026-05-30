@@ -32,7 +32,7 @@ from toolkit.llm_client import (
     LLMResponse,
     Message,
     ModelTier,
-    complete as llm_complete,
+    complete_with_retry as llm_complete,
 )
 
 

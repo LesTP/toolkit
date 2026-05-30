@@ -3,6 +3,7 @@ toolkit.llm_client — provider-agnostic LLM client.
 
 Public API:
     complete        — high-level: messages + config + tier → LLMResponse
+    complete_with_retry — complete() with exponential backoff on transient failures
     Message         — conversation message (role, content)
     ModelTier       — quality tier enum (QUALITY, DEFAULT, COMMODITY)
     LLMConfig       — provider + credentials + model tier mapping
@@ -23,6 +24,7 @@ from toolkit.llm_client.providers import (
     LLMProvider,
     OpenAIProvider,
     complete,
+    complete_with_retry,
     create_provider,
 )
 from toolkit.llm_client.types import (
@@ -37,6 +39,7 @@ from toolkit.llm_client.types import (
 
 __all__ = [
     "complete",
+    "complete_with_retry",
     "Message",
     "ModelTier",
     "LLMConfig",
