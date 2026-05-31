@@ -310,7 +310,7 @@ class TestComplete:
         calls = []
 
         def fake_complete(*, messages, config, tier):
-            calls.append((messages, config, tier))
+            calls.append({"messages": messages, "config": config, "tier": tier})
             return _response(input_tokens=20, output_tokens=10)
 
         monkeypatch.setattr("toolkit.cost_accountant.core.llm_complete", fake_complete)
@@ -331,6 +331,29 @@ class TestComplete:
         assert row["success"] is True
         assert row["cost_usd"] == pytest.approx(0.00021)
         assert row["cumulative_session_usd"] == pytest.approx(accountant.session_total)
+
+    def test_complete_forwards_attribution_and_purpose(
+        self, tmp_path, monkeypatch
+    ):
+        calls = []
+
+        def fake_complete(**kwargs):
+            calls.append(kwargs)
+            return _response(input_tokens=20, output_tokens=10)
+
+        monkeypatch.setattr("toolkit.cost_accountant.core.llm_complete", fake_complete)
+
+        CostAccountant(tmp_path / "ledger.jsonl").complete(
+            messages=[Message(role="user", content="hello")],
+            config=_config(),
+            tier=ModelTier.QUALITY,
+            budget=_budget(),
+            attribution="alpha",
+            purpose="generation",
+        )
+
+        assert calls[0]["attribution"] == "alpha"
+        assert calls[0]["purpose"] == "generation"
 
     def test_complete_updates_operation_total_for_budget_remaining(
         self, tmp_path, monkeypatch

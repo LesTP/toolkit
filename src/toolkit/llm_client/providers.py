@@ -268,6 +268,9 @@ def complete(
     messages: list[Message],
     config: LLMConfig,
     tier: ModelTier = ModelTier.DEFAULT,
+    *,
+    attribution: str | None = None,
+    purpose: str | None = None,
 ) -> LLMResponse:
     """High-level LLM call: resolve tier, split messages, call provider.
 
@@ -276,6 +279,8 @@ def complete(
             prompt; user messages become the user prompt.
         config: Provider configuration with tier→model mapping.
         tier: Quality tier to select the model.
+        attribution: Optional caller label for upstream logging/observability.
+        purpose: Optional semantic purpose label for caller-side routing.
 
     Returns:
         LLMResponse from the resolved provider and model.
@@ -379,6 +384,8 @@ def complete_with_retry(
     config: LLMConfig,
     tier: ModelTier = ModelTier.DEFAULT,
     *,
+    attribution: str | None = None,
+    purpose: str | None = None,
     max_attempts: int = 3,
     base_delay: float = 1.0,
     max_delay: float = 30.0,
@@ -410,6 +417,8 @@ def complete_with_retry(
         messages: Conversation messages (same as :func:`complete`).
         config: Provider configuration.
         tier: Quality tier to select the model.
+        attribution: Optional caller label forwarded to :func:`complete`.
+        purpose: Optional semantic purpose label forwarded to :func:`complete`.
         max_attempts: Total attempts including the first call (default 3 —
             meaning up to 2 retries after the initial attempt).
         base_delay: Base delay for exponential backoff in seconds (default 1.0).
@@ -437,7 +446,13 @@ def complete_with_retry(
 
     for attempt in range(max_attempts):
         try:
-            return complete(messages, config, tier)
+            return complete(
+                messages,
+                config,
+                tier,
+                attribution=attribution,
+                purpose=purpose,
+            )
         except LLMAPIError as exc:
             if not _is_retryable_api_error(exc):
                 raise

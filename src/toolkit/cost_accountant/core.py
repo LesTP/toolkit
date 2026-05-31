@@ -200,6 +200,8 @@ class CostAccountant:
         config: LLMConfig,
         tier: ModelTier,
         budget: Optional[CostBudget] = None,
+        attribution: Optional[str] = None,
+        purpose: Optional[str] = None,
     ) -> LLMResponse:
         """Budget-check, execute, and ledger an LLM client completion."""
         budget = budget or self.default_budget
@@ -225,7 +227,17 @@ class CostAccountant:
             raise
 
         try:
-            response = llm_complete(messages=messages, config=config, tier=tier)
+            complete_kwargs = {}
+            if attribution is not None:
+                complete_kwargs["attribution"] = attribution
+            if purpose is not None:
+                complete_kwargs["purpose"] = purpose
+            response = llm_complete(
+                messages=messages,
+                config=config,
+                tier=tier,
+                **complete_kwargs,
+            )
         except Exception as error:
             self._append_failure(
                 budget=budget,

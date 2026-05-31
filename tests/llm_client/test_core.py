@@ -419,6 +419,22 @@ class TestCompleteWithRetry:
         assert result.content == "ok"
         assert provider.call_count == 1
 
+    def test_accepts_attribution_and_purpose(self, monkeypatch):
+        _no_sleep(monkeypatch)
+        provider = FlakeyProvider([])
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.create_provider",
+            lambda config: provider,
+        )
+        result = complete_with_retry(
+            [Message(role="user", content="hi")],
+            _retry_config(),
+            attribution="alpha",
+            purpose="generation",
+        )
+        assert result.content == "ok"
+        assert provider.call_count == 1
+
     def test_retries_on_429(self, monkeypatch):
         _no_sleep(monkeypatch)
         provider = FlakeyProvider([
