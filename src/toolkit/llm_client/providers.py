@@ -186,6 +186,14 @@ class OpenAIProvider(LLMProvider):
         max_tokens: int,
         temperature: float = 0.7,
     ) -> LLMResponse:
+        # Reasoning-family models (gpt-5.x, o1/o3/o4) require
+        # `max_completion_tokens`; legacy gpt-4.x / gpt-3.5 still accept
+        # `max_tokens`. Pick the right param name by model prefix.
+        model_lower = model.lower()
+        if model_lower.startswith(("gpt-5", "o1", "o3", "o4")):
+            token_kwarg = {"max_completion_tokens": max_tokens}
+        else:
+            token_kwarg = {"max_tokens": max_tokens}
         try:
             response = self._client.chat.completions.create(
                 model=model,
@@ -193,8 +201,8 @@ class OpenAIProvider(LLMProvider):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                max_tokens=max_tokens,
                 temperature=temperature,
+                **token_kwarg,
             )
         except self._openai.RateLimitError as e:
             retry_after = None
