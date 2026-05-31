@@ -50,6 +50,8 @@ async def structured_call(
     user_prompt: str,
     examples: list[Example] | list[dict[str, Any]] | None = None,
     max_retries: int = 1,
+    attribution: str | None = None,
+    purpose: str | None = None,
 ) -> StructuredResult:
     """Call an LLM expecting a JSON response, validate, and retry on failure.
 
@@ -96,7 +98,14 @@ async def structured_call(
 
     for attempt in range(1 + max_retries):
         try:
-            raw = await _call_llm(llm_client, config, tier, messages)
+            raw = await _call_llm(
+                llm_client,
+                config,
+                tier,
+                messages,
+                attribution=attribution,
+                purpose=purpose,
+            )
         except Exception as exc:
             # Infrastructure failure (network, API) — don't retry with
             # a fake "assistant" message; fail immediately.
@@ -183,9 +192,18 @@ async def _call_llm(
     config: dict[str, Any],
     tier: str,
     messages: list[dict[str, str]],
+    *,
+    attribution: str | None = None,
+    purpose: str | None = None,
 ) -> str:
     """Call the injected LLM client, handling sync and async."""
-    response = llm_client.complete(messages=messages, config=config, tier=tier)
+    response = llm_client.complete(
+        messages=messages,
+        config=config,
+        tier=tier,
+        attribution=attribution,
+        purpose=purpose,
+    )
     if isawaitable(response):
         response = await response
     if not isinstance(response, str):
