@@ -18,18 +18,26 @@ DEFAULT_PRICING: Dict[str, ModelPricing] = {
     "claude-sonnet-4-6": ModelPricing(3.0, 15.0),
     "claude-haiku-4-5": ModelPricing(0.25, 1.25),
     "claude-opus-4": ModelPricing(15.0, 75.0),
-    # OpenAI
+    # OpenAI (gpt-4.1 family — kept; date-suffixed model IDs from the
+    # API like "gpt-4.1-mini-2025-04-14" are normalized at lookup time)
     "gpt-4.1": ModelPricing(2.0, 8.0),
     "gpt-4.1-mini": ModelPricing(0.4, 1.6),
     "gpt-4.1-nano": ModelPricing(0.1, 0.4),
     "gpt-4o": ModelPricing(2.5, 10.0),
     "gpt-4o-mini": ModelPricing(0.15, 0.6),
-    "gpt-5.5": ModelPricing(2.0, 8.0),
-    "gpt-5.4": ModelPricing(2.0, 8.0),
-    "gpt-5.4-mini": ModelPricing(0.4, 1.6),
+    # OpenAI (gpt-5.x family — updated 2026-05-30 from operator's confirmed
+    # pricing page; prior values were placeholders carried over from gpt-4.1)
+    "gpt-5.5": ModelPricing(5.0, 30.0),
+    "gpt-5.4": ModelPricing(2.5, 15.0),
+    "gpt-5.4-mini": ModelPricing(0.75, 4.5),
+    # OpenAI (reasoning models — older defaults; verify before relying)
     "o3": ModelPricing(2.0, 8.0),
     "o3-mini": ModelPricing(1.1, 4.4),
     "o4-mini": ModelPricing(1.1, 4.4),
+    # Google (Gemini 2.5 family — added 2026-05-30 with paid-tier prices)
+    "gemini-2.5-flash-lite": ModelPricing(0.1, 0.4),
+    "gemini-2.5-flash": ModelPricing(0.3, 2.5),
+    "gemini-2.5-pro": ModelPricing(1.25, 10.0),
 }
 
 

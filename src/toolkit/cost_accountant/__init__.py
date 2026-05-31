@@ -11,9 +11,10 @@ Public API:
     CostReport           — historical ledger report
     ModelPricing         — per-million-token model pricing
     DEFAULT_PRICING      — built-in model pricing table
+    normalize_model_name — strip provider date-snapshot suffixes for lookup
 """
 
-from toolkit.cost_accountant.core import CostAccountant
+from toolkit.cost_accountant.core import CostAccountant, normalize_model_name
 from toolkit.cost_accountant.errors import (
     BudgetExceededError,
     CostAccountantError,
@@ -37,6 +38,7 @@ from toolkit.cost_accountant.types import (
 
 __all__ = [
     "CostAccountant",
+    "normalize_model_name",
     "CostBudget",
     "CostEstimate",
     "BatchEstimate",

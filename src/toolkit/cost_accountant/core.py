@@ -1,6 +1,7 @@
 """Core cost accountant implementation."""
 
 import json
+import re
 import time
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -34,6 +35,50 @@ from toolkit.llm_client import (
     ModelTier,
     complete_with_retry as llm_complete,
 )
+
+
+# Regexes for stripping provider date-snapshot suffixes from model IDs.
+#
+# OpenAI uses ISO-style YYYY-MM-DD with dashes:
+#   gpt-4.1-mini-2025-04-14 → strip "-2025-04-14"
+#   gpt-4o-2024-08-06       → strip "-2024-08-06"
+#
+# Anthropic uses packed YYYYMMDD without dashes between Y/M/D:
+#   claude-haiku-4-5-20251001 → strip "-20251001"
+#   claude-sonnet-4-20250514  → strip "-20250514"
+# (Note: some explicit dated Anthropic entries are kept in DEFAULT_PRICING
+# for backwards compatibility; normalization is a fallback when the exact
+# ID isn't in the table.)
+#
+# Google's Gemini uses short numeric suffixes like "-001"/"-002" (3 digits)
+# which are NOT date-shaped and remain untouched.
+#
+# Without normalization, dated IDs miss every entry in DEFAULT_PRICING and
+# the cost accountant falls back to the conservative $15/$75 default.
+# Retroactive audit of Run 8 cost ledger: 6.9x overall overestimate driven
+# almost entirely by this lookup miss (gpt-4.1-mini-2025-04-14 inflated 40x
+# from $0.49 actual to $19.73 reported; gemini-2.5-flash 39x).
+_OPENAI_DATE_SUFFIX_RE = re.compile(r"-\d{4}-\d{2}-\d{2}$")
+_ANTHROPIC_PACKED_DATE_SUFFIX_RE = re.compile(r"-\d{8}$")
+
+
+def normalize_model_name(model: str) -> str:
+    """Strip provider date-snapshot suffixes for pricing lookup.
+
+    Handles two formats:
+    - OpenAI ``-YYYY-MM-DD`` (e.g. ``gpt-4.1-mini-2025-04-14`` → ``gpt-4.1-mini``)
+    - Anthropic ``-YYYYMMDD`` packed (e.g. ``claude-haiku-4-5-20251001`` → ``claude-haiku-4-5``)
+
+    Google's Gemini ``-001``/``-002`` numeric suffixes are 3 digits and not
+    date-shaped; they are left intact (the table has explicit entries per
+    model variant).
+
+    Strips at most one suffix; safe to call on already-normalized names.
+    """
+    result = _OPENAI_DATE_SUFFIX_RE.sub("", model)
+    if result == model:
+        result = _ANTHROPIC_PACKED_DATE_SUFFIX_RE.sub("", model)
+    return result
 
 
 class CostAccountant:
@@ -85,8 +130,19 @@ class CostAccountant:
         input_tokens: int,
         expected_output_tokens: int = 1000,
     ) -> CostEstimate:
-        """Estimate cost for one call from token counts."""
+        """Estimate cost for one call from token counts.
+
+        Looks up pricing by ``model``, falling back to the normalized name
+        (date-suffix stripped) when the exact ID isn't in the table. If
+        neither hits, uses a conservative high-end default for budget
+        safety. The ``model`` field of the returned estimate preserves the
+        original string for ledger fidelity.
+        """
         pricing = self.pricing.get(model)
+        if pricing is None:
+            normalized = normalize_model_name(model)
+            if normalized != model:
+                pricing = self.pricing.get(normalized)
         if pricing is None:
             # Fall back to the highest known pricing for budget safety.
             pricing = ModelPricing(input_per_mtok=15.0, output_per_mtok=75.0)

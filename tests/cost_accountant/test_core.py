@@ -189,6 +189,122 @@ class TestEstimation:
         ) == 3
 
 
+class TestNormalizeModelName:
+    """Strip OpenAI date-snapshot suffixes for lookup. Other formats are no-op."""
+
+    def test_strips_openai_date_suffix(self):
+        from toolkit.cost_accountant import normalize_model_name
+        assert normalize_model_name("gpt-4.1-mini-2025-04-14") == "gpt-4.1-mini"
+
+    def test_strips_openai_date_on_other_models(self):
+        from toolkit.cost_accountant import normalize_model_name
+        assert normalize_model_name("gpt-4o-2024-08-06") == "gpt-4o"
+        assert normalize_model_name("gpt-5.5-2026-01-15") == "gpt-5.5"
+
+    def test_noop_on_undated_openai(self):
+        from toolkit.cost_accountant import normalize_model_name
+        assert normalize_model_name("gpt-4.1-mini") == "gpt-4.1-mini"
+
+    def test_strips_anthropic_packed_date(self):
+        # Anthropic packs the date without dashes between Y/M/D.
+        from toolkit.cost_accountant import normalize_model_name
+        assert normalize_model_name("claude-haiku-4-5-20251001") == "claude-haiku-4-5"
+        assert normalize_model_name("claude-sonnet-4-20250514") == "claude-sonnet-4"
+
+    def test_noop_on_gemini_numeric_suffix(self):
+        # Google uses -001 / -002 — not date-shaped, should not be stripped.
+        from toolkit.cost_accountant import normalize_model_name
+        assert normalize_model_name("gemini-1.5-pro-001") == "gemini-1.5-pro-001"
+        assert normalize_model_name("gemini-2.5-flash-lite") == "gemini-2.5-flash-lite"
+
+    def test_only_trailing_date_stripped(self):
+        # A date mid-name should not be stripped.
+        from toolkit.cost_accountant import normalize_model_name
+        assert normalize_model_name("gpt-4o-2024-08-06-preview") == "gpt-4o-2024-08-06-preview"
+
+
+class TestDatedModelLookup:
+    """End-to-end: dated OpenAI IDs from the API should hit the right pricing entry."""
+
+    def test_dated_gpt_4_1_mini_uses_aliased_pricing(self, tmp_path):
+        # The bug we fixed: gpt-4.1-mini-2025-04-14 previously fell back to
+        # the conservative $15/$75 default (~37x overestimate).
+        # Now it should resolve to gpt-4.1-mini's $0.40/$1.60.
+        estimate = CostAccountant(tmp_path / "ledger.jsonl").estimate_cost(
+            "gpt-4.1-mini-2025-04-14",
+            input_tokens=1_000_000,
+            expected_output_tokens=1_000_000,
+        )
+        # gpt-4.1-mini = $0.40 in + $1.60 out per Mtok
+        assert estimate.input_cost_usd == pytest.approx(0.4)
+        assert estimate.output_cost_usd == pytest.approx(1.6)
+        assert estimate.total_usd == pytest.approx(2.0)
+
+    def test_dated_id_preserves_original_in_estimate_field(self, tmp_path):
+        # The model field on the estimate should keep the original dated ID
+        # for ledger fidelity, even though pricing was resolved via alias.
+        estimate = CostAccountant(tmp_path / "ledger.jsonl").estimate_cost(
+            "gpt-4o-2024-08-06",
+            input_tokens=1000,
+            expected_output_tokens=1000,
+        )
+        assert estimate.model == "gpt-4o-2024-08-06"
+
+    def test_dated_claude_haiku_uses_aliased_pricing(self, tmp_path):
+        # Anthropic packed date (-20251001) should normalize to claude-haiku-4-5.
+        estimate = CostAccountant(tmp_path / "ledger.jsonl").estimate_cost(
+            "claude-haiku-4-5-20251001",
+            input_tokens=1_000_000,
+            expected_output_tokens=1_000_000,
+        )
+        # claude-haiku-4-5 = $0.25 in + $1.25 out per Mtok
+        assert estimate.input_cost_usd == pytest.approx(0.25)
+        assert estimate.output_cost_usd == pytest.approx(1.25)
+
+    def test_exact_dated_anthropic_still_works(self, tmp_path):
+        # claude-sonnet-4-20250514 is an explicit entry — original lookup
+        # should hit first, before normalization is attempted.
+        estimate = CostAccountant(tmp_path / "ledger.jsonl").estimate_cost(
+            "claude-sonnet-4-20250514",
+            input_tokens=1_000_000,
+            expected_output_tokens=1_000_000,
+        )
+        assert estimate.input_cost_usd == pytest.approx(3.0)
+        assert estimate.output_cost_usd == pytest.approx(15.0)
+
+    def test_truly_unknown_still_falls_back(self, tmp_path):
+        # A model name that doesn't normalize to anything in the table must
+        # still hit the conservative fallback.
+        estimate = CostAccountant(tmp_path / "ledger.jsonl").estimate_cost(
+            "completely-made-up-model",
+            input_tokens=1_000_000,
+            expected_output_tokens=0,
+        )
+        assert estimate.input_cost_usd == pytest.approx(15.0)
+
+
+class TestUpdatedPricing:
+    """gpt-5.x prices updated 2026-05-30 from operator's confirmed pricing page."""
+
+    def test_gpt_5_5_pricing(self):
+        assert DEFAULT_PRICING["gpt-5.5"] == ModelPricing(5.0, 30.0)
+
+    def test_gpt_5_4_pricing(self):
+        assert DEFAULT_PRICING["gpt-5.4"] == ModelPricing(2.5, 15.0)
+
+    def test_gpt_5_4_mini_pricing(self):
+        assert DEFAULT_PRICING["gpt-5.4-mini"] == ModelPricing(0.75, 4.5)
+
+    def test_gemini_2_5_family_added(self):
+        assert "gemini-2.5-flash-lite" in DEFAULT_PRICING
+        assert "gemini-2.5-flash" in DEFAULT_PRICING
+        assert "gemini-2.5-pro" in DEFAULT_PRICING
+        # flash-lite should be the cheapest Gemini 2.5 option
+        assert DEFAULT_PRICING["gemini-2.5-flash-lite"].input_per_mtok < \
+               DEFAULT_PRICING["gemini-2.5-flash"].input_per_mtok < \
+               DEFAULT_PRICING["gemini-2.5-pro"].input_per_mtok
+
+
 class TestComplete:
     def test_complete_calls_llm_and_writes_success_ledger(self, tmp_path, monkeypatch):
         calls = []
