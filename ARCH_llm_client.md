@@ -109,6 +109,14 @@ class LLMProvider(ABC):
 
 Adding a provider: implement `LLMProvider`, add a branch to `create_provider`. No consumer changes.
 
+### Token-parameter dispatch (OpenAIProvider)
+
+OpenAI's reasoning-family models (`gpt-5*`, `o1*`, `o3*`, `o4*`) reject the legacy `max_tokens` parameter with a 400 and require `max_completion_tokens` instead. The non-reasoning models (`gpt-4*`, `gpt-3.5*`) keep accepting `max_tokens`.
+
+`OpenAIProvider.call()` dispatches on a lowercase model-prefix check and sends the matching kwarg to `chat.completions.create()`. Consumers of `LLMProvider.call()` pass `max_tokens: int` unchanged — the OpenAI-side translation is internal. Contract pinned by `TestOpenAIProviderTokenParam` in `tests/llm_client/test_core.py`.
+
+If OpenAI introduces another prefix that requires `max_completion_tokens`, extend the prefix tuple in `OpenAIProvider.call()`. No changes needed in `LLMProvider`, `create_provider`, or consumers.
+
 ## Outputs
 
 ```python

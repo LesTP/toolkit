@@ -153,6 +153,8 @@ complete(messages: list[Message], config: LLMConfig,
 create_provider(config: LLMConfig) -> LLMProvider
 ```
 
+**Provider-specific behavior:** `OpenAIProvider.call()` internally dispatches the token-limit kwarg by model prefix — `gpt-5*` / `o1*` / `o3*` / `o4*` get `max_completion_tokens`, others get `max_tokens`. Consumers always pass `max_tokens: int` on the `LLMProvider.call()` contract; the OpenAI-side translation is internal. See `ARCH_llm_client.md` "Token-parameter dispatch."
+
 ---
 
 ## toolkit.telegram_client

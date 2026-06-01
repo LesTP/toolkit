@@ -675,10 +675,80 @@ class TestCompleteWithRetry:
             api_key="key",
             models={"default": "m"},
         )
-        # Tier "quality" not in models — complete() raises ValueError
+        # Tier "quality" not in models - complete() raises ValueError
         with pytest.raises(ValueError):
             complete_with_retry(
                 [Message(role="user", content="hi")],
                 config,
                 tier=ModelTier.QUALITY,
             )
+
+
+# ---------------------------------------------------------------------------
+# OpenAIProvider.call() — model-prefix token-parameter dispatch
+# ---------------------------------------------------------------------------
+
+
+class TestOpenAIProviderTokenParam:
+    """Pin the contract that OpenAIProvider.call() picks the right token-limit
+    parameter name based on model prefix.
+
+    OpenAI's reasoning-family models (gpt-5.x, o1, o3, o4) reject the legacy
+    `max_tokens` parameter with a 400 and require `max_completion_tokens`
+    instead; the non-reasoning models (gpt-4.x, gpt-3.5) keep accepting the
+    legacy name. Without dispatch, any deployment on a reasoning model fails.
+    """
+
+    @staticmethod
+    def _stub_openai_response():
+        """Minimal OpenAI-shaped response object for the provider to unpack."""
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))],
+            usage=SimpleNamespace(prompt_tokens=10, completion_tokens=2),
+            model="recorded-by-stub",
+        )
+
+    def _provider_with_recorder(self):
+        """Build an OpenAIProvider whose chat.completions.create() records kwargs."""
+        from toolkit.llm_client.providers import OpenAIProvider
+
+        provider = OpenAIProvider(api_key="sk-test")
+        captured: dict = {}
+
+        def fake_create(**kwargs):
+            captured.update(kwargs)
+            return self._stub_openai_response()
+
+        provider._client.chat.completions.create = fake_create
+        return provider, captured
+
+    @pytest.mark.parametrize(
+        "model",
+        ["gpt-5-mini", "gpt-5.4-mini", "o1", "o1-mini", "o3-mini", "o4-mini"],
+    )
+    def test_reasoning_models_use_max_completion_tokens(self, model):
+        provider, captured = self._provider_with_recorder()
+        provider.call(
+            model=model,
+            system_prompt="sys",
+            user_prompt="usr",
+            max_tokens=2048,
+        )
+        assert captured.get("max_completion_tokens") == 2048
+        assert "max_tokens" not in captured
+
+    @pytest.mark.parametrize(
+        "model",
+        ["gpt-4.1-mini", "gpt-4o", "gpt-4", "gpt-3.5-turbo"],
+    )
+    def test_legacy_models_use_max_tokens(self, model):
+        provider, captured = self._provider_with_recorder()
+        provider.call(
+            model=model,
+            system_prompt="sys",
+            user_prompt="usr",
+            max_tokens=2048,
+        )
+        assert captured.get("max_tokens") == 2048
+        assert "max_completion_tokens" not in captured
