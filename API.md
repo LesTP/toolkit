@@ -3,7 +3,7 @@
 Canonical API signatures for all toolkit modules. Use these when building fakes
 in consumer projects where toolkit is not importable.
 
-Last synced: 2026-05-28
+Last synced: 2026-06-02
 
 **Consumers:** Diplomat, Phosphene, Codexbot, Year-in-Search, TGBot
 
@@ -408,3 +408,236 @@ validate_json_schema(data: dict[str, Any], schema: dict[str, Any],
 load_prompt(path: str | Path) -> str
 load_schema(path: str | Path) -> dict[str, Any]
 ```
+
+---
+
+## toolkit.gateway
+**Consumers:** Phosphene
+
+### Types
+
+```python
+@dataclass
+class GatewayConfig:
+    platforms: list[PlatformConfig]
+    default_platform: str
+    listen: bool = True
+
+@dataclass
+class PlatformConfig:
+    name: str
+    adapter_type: str            # "telegram" | "log" | "fake"
+    credentials: dict
+    params: dict = field(default_factory=dict)
+    enabled: bool = True
+    output_formats: list[str] = field(default_factory=lambda: ["text"])
+                                 # supported: "text" | "markdown" | "thread" | "telegraph"
+
+@dataclass
+class InboundMessage:
+    content: str
+    platform: str
+    message_id: str
+    sender: str
+    timestamp: datetime
+    reply_to: str | None = None
+    reactions: list[str] | None = None
+    raw: dict | None = None
+
+@dataclass
+class OutboundMessage:
+    content: str
+    platform: str
+    format: str = "text"
+    reply_to: str | None = None
+    intent_tag: str | None = None
+    metadata: dict = field(default_factory=dict)
+
+@dataclass
+class DeliveryResult:
+    success: bool
+    platform: str
+    message_id: str | None
+    error: str | None = None
+
+@dataclass(kw_only=True)
+class FeedbackSignal:
+    platform: str
+    message_id: str
+    signal_type: str             # "reaction" | "reply" | "edit" | adapter-specific
+    value: str | None = None
+    sender: str
+    timestamp: datetime
+
+class GatewayError(Exception): ...
+class PlatformConfigError(GatewayError): ...
+class PlatformConnectionError(GatewayError): ...
+class PlatformNotFoundError(GatewayError): ...
+class FormatNotSupportedError(GatewayError): ...
+class DeliveryError(GatewayError): ...
+```
+
+### Class
+
+```python
+class Gateway:
+    def __init__(self, config: GatewayConfig,
+                 on_message: Callable[[InboundMessage], None],
+                 on_feedback: Callable[[FeedbackSignal], None],
+                 *,
+                 _adapter_factories: Mapping[str, AdapterFactory] | None = None,
+                 _telegram_client_factory: TelegramClientFactory | None = None) -> None
+    def send(self, message: OutboundMessage) -> DeliveryResult
+    def send_to_default(self, content: str, format: str = "text",
+                        intent_tag: str | None = None) -> DeliveryResult
+    def start_listener(self) -> None
+    def stop_listener(self) -> None
+```
+
+### Notes
+- Telegram adapter optionally imports `toolkit.telegram_client` at runtime — the second documented toolkit cross-module exception (alongside Cost Accountant → LLM Client). Log and fake adapters work without it.
+- Inbound + feedback callbacks are isolated; adapter errors surface as `DeliveryResult.success=False` rather than exceptions out of `send()`.
+
+---
+
+## toolkit.source_ingestion
+**Consumers:** Phosphene
+
+### Types
+
+```python
+@dataclass
+class ContentItem:
+    content: str
+    source: str
+    timestamp: datetime
+    url: str | None = None
+    linked_urls: list[str] = field(default_factory=list)
+    title: str | None = None
+    author: str | None = None
+    human_annotation: str | None = None
+
+@dataclass
+class AdapterConfig:
+    adapter_type: str            # "rss" | "telegram_channel" | "reddit" | "human_share"
+                                 # | "corpus_livejournal" | "corpus_blogspot"
+                                 # | "corpus_text" | "corpus_facebook"
+                                 # | "corpus_twitter"
+    source_label: str
+    poll_interval: timedelta = timedelta(hours=4)
+    enabled: bool = True
+    credentials: dict | None = None
+    params: dict = field(default_factory=dict)
+
+@dataclass
+class IngestionConfig:
+    adapters: list[AdapterConfig]
+    fetch_timeout: timedelta = timedelta(seconds=30)
+    max_content_length: int = 50_000
+    extract_links: bool = True
+
+@dataclass
+class IngestionResult:
+    items: list[ContentItem]
+    adapter_label: str
+    errors: list[IngestionError]
+    poll_timestamp: datetime
+
+@dataclass
+class IngestionError:
+    url: str | None
+    error: str
+    adapter_label: str
+
+class SourceIngestionError(Exception): ...
+class AdapterConfigError(SourceIngestionError): ...
+class AdapterNotFoundError(SourceIngestionError): ...
+```
+
+### Class
+
+```python
+class SourceIngestion:
+    def __init__(self, config: IngestionConfig) -> None
+    def poll(self, adapter_label: str | None = None) -> list[IngestionResult]
+    def poll_once(self, adapter_label: str) -> IngestionResult
+```
+
+### Notes
+- Adapters use a durable `LastSeenMarker` (path configurable via `params["marker_store_path"]`) so polling is idempotent across restarts.
+- Corpus adapters (LiveJournal, Blogspot, plain text, Facebook archive HTML) read static archives once and advance the marker to the last imported timestamp.
+- Live adapters (RSS, Telegram channel, Reddit, human-share DM) advance the marker after every poll.
+
+---
+
+## toolkit.feedback_collector
+**Consumers:** Phosphene
+
+### Types
+
+```python
+@dataclass
+class FeedbackEvent:
+    output_message_id: str
+    output_intent_tag: str
+    output_mode: str
+    signal_type: str             # "like" | "dislike" | "reply" | "forward" | "silence"
+    signal_value: str | None = None
+    source_note_ids: list[str] = field(default_factory=list)
+    retention_criteria: list[str] = field(default_factory=list)
+    timestamp: datetime = field(default_factory=datetime.now)
+
+@dataclass
+class FeedbackCollectorConfig:
+    silence_window: timedelta = timedelta(hours=24)
+    delayed_recheck_window: timedelta = timedelta(days=7)
+    positive_reactions: list[str] = field(
+        default_factory=lambda: ["👍", "❤️", "🔥", "💡", "🤔"]
+    )
+    negative_reactions: list[str] = field(default_factory=lambda: ["👎"])
+    reply_is_positive: bool = True
+    forward_is_positive: bool = True
+
+@dataclass
+class OutputRecord:
+    message_id: str
+    intent_tag: str
+    output_mode: str
+    source_note_ids: list[str]
+    retention_criteria: list[str]
+    delivered_at: datetime
+    feedback_events: list[FeedbackEvent] = field(default_factory=list)
+    silence_recorded: bool = False
+```
+
+### Class
+
+```python
+class FeedbackCollector:
+    def __init__(self, memory_store, config: FeedbackCollectorConfig | None = None) -> None
+    def register_output(self, output, delivery) -> None
+    def process_signal(self, signal) -> FeedbackEvent | None
+    def check_silence(self) -> list[FeedbackEvent]
+    def check_delayed_engagement(self) -> list[FeedbackEvent]
+    def update_unresolvedness_on_feedback(self, event: FeedbackEvent) -> None
+```
+
+### Memory store contract (duck-typed)
+
+The injected `memory_store` must structurally support:
+
+```python
+get_note(note_id: str) -> object       # with .tags, .tier, .unresolvedness attrs
+store_note(note) -> Any                # accepts any object with the field shape of
+                                       # toolkit.feedback_collector.types._NoteInput
+update_note(note_id: str, patch) -> Any
+                                       # accepts any object with the field shape of
+                                       # toolkit.feedback_collector.types._NotePatch
+```
+
+The `_NoteInput` / `_NotePatch` shapes are intentionally private — they mirror Phosphene's `memory_store.NoteInput` / `NotePatch` field names and types exactly so Phosphene's `MemoryStore` accepts them by duck typing without a Phosphene-side wiring change. Other consumers wire any memory store that satisfies the structural contract.
+
+### Notes
+- `register_output(output, delivery)` reads `output.source_note_ids`, `output.intent_tag`, `output.output_mode` and `delivery.success`, `delivery.message_id` — structural; works with `Gateway.DeliveryResult` and `GeneratorOutput` from any consumer.
+- `process_signal(signal)` reads `signal.message_id`, `signal.signal_type`, `signal.value`, `signal.timestamp` — structural; works with `toolkit.gateway.FeedbackSignal`.
+- `check_silence()` and `_prune_old_records()` use timezone-aware `datetime.now(timezone.utc)`. Consumers must deliver `OutputRecord.delivered_at` as timezone-aware (Phosphene currently has a pre-existing naive-vs-aware mismatch; see Phosphene `DESIGN_GLOBAL.md`).
