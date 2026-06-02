@@ -59,6 +59,27 @@ execute→review transition (when all steps are checked off), stop-before-review
 and close→blocked. The worker never computes transitions or checks exit
 conditions — it reads ACTION/NEXT and does the work.
 
+### Loop discipline (critical)
+
+Two contracts you must NOT break. Both have already cost work in production loops.
+
+**1. Single call per iteration.** Call `state_machine.sh` exactly ONCE per loop iteration — at the top, before the action. Never re-call inside or after the action. The script decrements budget on every call. "Defensive" re-calls ("let me check the controller before touching files") drop a step.
+
+If your context feels fuzzy mid-action — long file read, session resume, internal recovery moment — assume the action the script dispatched is **still in flight** and complete it. Re-read your own previous tool output to reorient if needed. Only call `state_machine.sh` again after you have completed steps 4–7 of the LOOP (commit + DEVLOG + state-write).
+
+**2. Trust the script's verdict; never self-judge.** The script decides EXIT, REVIEW, EXECUTE, etc. — based on `STEP_BUDGET`, `STOP_BEFORE_REVIEW`, unchecked-steps count, and the `blocked` flag. Your job is to do what it returns and then call it again. Do NOT:
+
+- Pre-compute budget exhaustion (`"5 - 3 = exhausted, stopping"` is wrong arithmetic AND wrong process — `5 - 3 = 2`)
+- Decide on your own that REVIEW is next
+- Skip the call because "I know what it will say"
+
+If the script keeps returning EXECUTE and you have completed all named steps in the phase, that means an unchecked checkbox exists somewhere — check the DEVPLAN and resolve it, don't bypass the script.
+
+**Documented incidents these rules address (real production failures):**
+
+- *Codex iter:* re-called `state_machine.sh` after a 105k-char `cat` read; lost the final budgeted action (budget=8, only 7 actions performed).
+- *Claude iter:* self-judged "STEP_BUDGET of 5 exhausted (used 3 actions)" and exited with 2 actions still available.
+
 ### Turn health check (Codex only)
 
 If `ITERATION_JSONL` was provided in the prompt, check the turn count
@@ -73,6 +94,40 @@ This is a safety circuit breaker, not the budgeting mechanism.
 
 The `/close` bot command (or human) clears the gate: sets `blocked: false`
 and `state: plan`.
+
+### Shell command discipline (non-interactive only)
+
+The loop invokes bash non-interactively — no stdin, no editor, no human at the
+keyboard. Any command that waits for input, opens `$EDITOR`, or pipes through
+a pager will **hang the loop indefinitely** until the operator manually kills
+the process tree.
+
+**Git — banned (always hang):**
+
+- `git add -p` / `git add --patch` — interactive hunk staging, no scriptable equivalent. Use `git add <paths>` to stage whole files.
+- `git commit` without `-m` — opens `$EDITOR`. Always pass `-m "..."`. For amends: `git commit --amend -m "..."` or `git commit --amend --no-edit`.
+- `git rebase -i` / `git rebase --interactive` — opens `$EDITOR`. Use `git rebase --autosquash` or scripted edits.
+- `git citool` / `git gui` — GUI tools, never available.
+- Any subcommand that opens an editor without a message-override flag.
+
+**Git — pager-bypass on potentially-long reads:**
+
+- `git --no-pager log`, `git --no-pager diff`, `git --no-pager show`. Otherwise git auto-pipes through `less`, which blocks on stdin.
+
+**Other shells — common offenders:**
+
+- Interactive editors (`nano`, `vim`, `vi`, `emacs`) — use `sed -i '...'` or heredocs (`cat > file <<'EOF' ... EOF`) for non-interactive edits.
+- Pagers (`less`, `more`, `man`) — pipe through `cat` or set `PAGER=cat`.
+- `read` (bash builtin) — by definition waits on stdin.
+- `sudo` without `-n` or a NOPASSWD config entry — waits for a password prompt.
+- `ssh` without `-o BatchMode=yes` — may prompt for host-key acceptance or a password.
+
+**If you need to stage only part of a file's diff:** don't reach for `git add -p`
+as a workaround — there's no way for the loop to provide hunk-by-hunk stdin.
+Instead, split the change into separate edits so each file change is a discrete
+commit's worth, or revert unwanted parts with `git restore <file>` before
+`git add <file>`. The working tree is the source of truth; shape it correctly
+before staging.
 
 ---
 
