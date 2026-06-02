@@ -301,6 +301,179 @@ print(f"{response.provider}/{response.model}: {response.content[:80]}...")
 
 ---
 
+### `toolkit.gateway`
+
+Multi-platform message bus for both inbound and outbound communication. Adapter registry with Telegram (backed by `toolkit.telegram_client`), log, and fake adapters. Feedback signal dispatch (reactions, replies, edits).
+
+#### Quick start
+
+```python
+from toolkit.gateway import (
+    Gateway, GatewayConfig, PlatformConfig,
+    InboundMessage, OutboundMessage, FeedbackSignal,
+)
+
+def on_message(msg: InboundMessage) -> None:
+    print(f"{msg.sender} on {msg.platform}: {msg.content}")
+
+def on_feedback(signal: FeedbackSignal) -> None:
+    print(f"{signal.signal_type} on message {signal.message_id}: {signal.value}")
+
+config = GatewayConfig(
+    platforms=[
+        PlatformConfig(
+            name="telegram",
+            adapter_type="telegram",
+            credentials={"bot_token": "123456:ABC-DEF"},
+            params={"chat_id": "42"},
+            output_formats=["text", "markdown", "telegraph"],
+        ),
+        PlatformConfig(
+            name="log",
+            adapter_type="log",
+            credentials={},
+            params={"log_path": "logs/outputs.jsonl"},
+        ),
+    ],
+    default_platform="telegram",
+    listen=True,
+)
+
+gateway = Gateway(config, on_message=on_message, on_feedback=on_feedback)
+gateway.send(OutboundMessage(content="Hello", platform="telegram"))
+gateway.start_listener()  # spawns a polling thread per platform that supports it
+# ...
+gateway.stop_listener()
+```
+
+#### Public API
+
+| Symbol | Kind | Description |
+|--------|------|-------------|
+| `Gateway` | class | Public manager: `send`, `send_to_default`, `start_listener`, `stop_listener` |
+| `GatewayConfig` | dataclass | List of platforms + default platform + listen flag |
+| `PlatformConfig` | dataclass | Per-platform adapter type, credentials, params, output formats |
+| `InboundMessage` | dataclass | Normalized inbound (content, platform, message_id, sender, timestamp, reply_to, reactions, raw) |
+| `OutboundMessage` | dataclass | Outbound (content, platform, format, reply_to, intent_tag, metadata) |
+| `DeliveryResult` | dataclass | Send result (success, platform, message_id, error) |
+| `FeedbackSignal` | dataclass | Feedback event (platform, message_id, signal_type, value, sender, timestamp) |
+| `GatewayError` | exception | Base error class |
+| `PlatformConfigError` | exception | Configuration validation failed |
+| `PlatformConnectionError` | exception | Listener could not connect |
+| `PlatformNotFoundError` | exception | Target platform missing or disabled |
+| `FormatNotSupportedError` | exception | Platform does not support the requested output format |
+| `DeliveryError` | exception | Adapter-side delivery failure |
+
+---
+
+### `toolkit.source_ingestion`
+
+Adapter framework that pulls content from external sources and normalizes it into `ContentItem` objects. Supports live sources (RSS, Telegram channel, Reddit, human-share DM) and corpus importers (LiveJournal, Blogspot, plain text, Facebook archive HTML). Durable last-seen markers make polling idempotent across restarts.
+
+#### Quick start
+
+```python
+from datetime import timedelta
+from toolkit.source_ingestion import (
+    SourceIngestion, IngestionConfig, AdapterConfig,
+)
+
+config = IngestionConfig(
+    adapters=[
+        AdapterConfig(
+            adapter_type="rss",
+            source_label="some_blog",
+            poll_interval=timedelta(hours=4),
+            params={
+                "feed_url": "https://example.com/feed.xml",
+                "marker_store_path": "./markers.json",
+            },
+        ),
+        AdapterConfig(
+            adapter_type="corpus_text",
+            source_label="my_archive",
+            params={
+                "archive_path": "./seed/",
+                "marker_store_path": "./markers.json",
+            },
+        ),
+    ],
+)
+
+ingestion = SourceIngestion(config)
+for result in ingestion.poll():
+    print(f"{result.adapter_label}: {len(result.items)} items, {len(result.errors)} errors")
+    for item in result.items:
+        print(f"  [{item.timestamp}] {item.title or item.content[:60]}")
+```
+
+#### Public API
+
+| Symbol | Kind | Description |
+|--------|------|-------------|
+| `SourceIngestion` | class | Public manager: `poll(adapter_label=None)`, `poll_once(adapter_label)` |
+| `IngestionConfig` | dataclass | List of adapters + fetch timeout + max content length + link extraction toggle |
+| `AdapterConfig` | dataclass | Adapter type, source label, poll interval, credentials, params |
+| `ContentItem` | dataclass | Normalized content (content, source, timestamp, url, linked_urls, title, author, human_annotation) |
+| `IngestionResult` | dataclass | Per-adapter poll result (items, errors, poll_timestamp) |
+| `IngestionError` | dataclass | Per-URL fetch error |
+| `SourceIngestionError` | exception | Base error class |
+| `AdapterConfigError` | exception | Configuration validation failed |
+| `AdapterNotFoundError` | exception | Unknown `adapter_type` requested |
+
+Built-in `adapter_type` values: `rss`, `telegram_channel`, `reddit`, `human_share`, `corpus_livejournal`, `corpus_blogspot`, `corpus_text`, `corpus_facebook`, `corpus_twitter`.
+
+---
+
+### `toolkit.feedback_collector`
+
+Normalizes platform feedback signals (reactions, replies, forwards, silence) into structured `FeedbackEvent`s and writes them to a caller-supplied memory store. Includes output tracking, bounded pruning, silence detection, and optional unresolvedness bumps on positive feedback.
+
+#### Quick start
+
+```python
+from toolkit.feedback_collector import (
+    FeedbackCollector, FeedbackCollectorConfig,
+)
+from toolkit.gateway import FeedbackSignal
+
+# memory_store must structurally support get_note / store_note / update_note
+collector = FeedbackCollector(memory_store=my_memory_store)
+
+# Register an output when you deliver something
+collector.register_output(generator_output, delivery_result)
+
+# When a feedback signal arrives via the gateway, normalize it
+def on_feedback(signal: FeedbackSignal) -> None:
+    event = collector.process_signal(signal)
+    if event is not None:
+        print(f"recorded: {event.signal_type} on {event.output_intent_tag}")
+
+# Periodically check for silence on old outputs that never got feedback
+silenced = collector.check_silence()
+```
+
+#### Memory store contract
+
+The injected `memory_store` must structurally support:
+
+- `get_note(note_id)` — returns an object with `.tags`, `.tier`, `.unresolvedness` attributes
+- `store_note(note)` — accepts any object with the field shape of `toolkit.feedback_collector.types._NoteInput`
+- `update_note(note_id, patch)` — accepts any object with the field shape of `_NotePatch`
+
+The `_NoteInput` / `_NotePatch` shapes are private — they mirror Phosphene's `memory_store.NoteInput` / `NotePatch` field names and types so Phosphene's `MemoryStore` accepts them by duck typing without any wiring change. Other consumers wire any memory store that satisfies the structural contract.
+
+#### Public API
+
+| Symbol | Kind | Description |
+|--------|------|-------------|
+| `FeedbackCollector` | class | `register_output`, `process_signal`, `check_silence`, `check_delayed_engagement`, `update_unresolvedness_on_feedback` |
+| `FeedbackCollectorConfig` | dataclass | Silence window, positive/negative reactions, reply/forward polarity |
+| `FeedbackEvent` | dataclass | Normalized feedback (output_message_id, intent_tag, output_mode, signal_type, signal_value, source_note_ids, retention_criteria, timestamp) |
+| `OutputRecord` | dataclass | Tracked output (message_id, intent_tag, source_note_ids, retention_criteria, delivered_at, feedback_events, silence_recorded) |
+
+---
+
 ## Project structure
 
 ```
@@ -309,24 +482,47 @@ toolkit/
 └── src/toolkit/
     ├── __init__.py
     ├── llm_client/
-    │   ├── __init__.py        Public re-exports
-    │   ├── types.py           LLMConfig, LLMResponse, error classes
-    │   └── providers.py       LLMProvider ABC, AnthropicProvider, factory
+    │   ├── __init__.py            Public re-exports
+    │   ├── types.py               LLMConfig, LLMResponse, error classes
+    │   └── providers.py           LLMProvider ABC, AnthropicProvider, factory
     ├── telegram_client/
-    │   ├── __init__.py        Public re-exports
-    │   ├── types.py           Data types and errors
-    │   ├── transport.py       HTTP transport (Protocol + urllib impl)
-    │   ├── formatting.py      MarkdownV2 escaping, message splitting
-    │   └── client.py          TelegramClient (polling, send, edit)
-    └── json_rpc/
-        ├── __init__.py        Public re-exports (lazy-loads WebSocketTransport)
-        ├── types.py           Error hierarchy
-        ├── transport.py       Subprocess transport + Protocol
-        ├── transport_ws.py    WebSocket transport (optional websockets dep)
-        └── client.py          JsonRpcClient (correlation, routing, lifecycle)
+    │   ├── __init__.py            Public re-exports
+    │   ├── types.py               Data types and errors
+    │   ├── transport.py           HTTP transport (Protocol + urllib impl)
+    │   ├── formatting.py          MarkdownV2 escaping, message splitting
+    │   └── client.py              TelegramClient (polling, send, edit)
+    ├── json_rpc/
+    │   ├── __init__.py            Public re-exports (lazy-loads WebSocketTransport)
+    │   ├── types.py               Error hierarchy
+    │   ├── transport.py           Subprocess transport + Protocol
+    │   ├── transport_ws.py        WebSocket transport (optional websockets dep)
+    │   └── client.py              JsonRpcClient (correlation, routing, lifecycle)
+    ├── gateway/
+    │   ├── __init__.py            Public re-exports
+    │   ├── types.py               GatewayConfig, PlatformConfig, messages, signals
+    │   ├── errors.py              Gateway exception hierarchy
+    │   ├── adapters.py            Adapter Protocol + Log/Fake/Telegram adapters
+    │   └── gateway.py             Gateway manager (send, listener lifecycle)
+    ├── source_ingestion/
+    │   ├── __init__.py            Public re-exports
+    │   ├── types.py               ContentItem, AdapterConfig, IngestionConfig
+    │   ├── errors.py              Source Ingestion exception hierarchy
+    │   ├── adapters.py            Adapter Protocol + registry + LastSeenMarker
+    │   ├── ingestion.py           SourceIngestion manager (poll, poll_once)
+    │   ├── normalization.py       URL fetching + content normalization helpers
+    │   ├── rss.py                 RSS adapter
+    │   ├── telegram_channel.py    Telegram channel adapter
+    │   ├── reddit.py              Reddit adapter
+    │   ├── human_share.py         Human-share (DM) adapter
+    │   └── corpus.py              LiveJournal/Blogspot/Text/Facebook/Twitter importers
+    └── feedback_collector/
+        ├── __init__.py            Public re-exports
+        ├── types.py               FeedbackEvent, OutputRecord, _NoteInput, _NotePatch
+        └── collector.py           FeedbackCollector (register, classify, silence)
 ```
 
 ## Consumers
 
 - **codexbot** — uses both `telegram_client` (polling, messaging) and `json_rpc` (Codex app-server communication)
 - **TGbot** — uses `telegram_client.formatting` (escape_markdown, escape_url, format_link) and `llm_client` (LLM provider abstraction)
+- **Phosphene** — uses `gateway` (Telegram outbound + listener), `source_ingestion` (RSS, Telegram channel, corpus importers), `feedback_collector` (signal normalization wired into its own `MemoryStore` via duck-typed contract), plus `embedding`, `llm_client` (via Anthropic provider)
