@@ -12,6 +12,9 @@
 | Cost Accountant | Cost tracking and budget enforcement for LLM API calls. Wraps llm_client with pre-call estimation, budget checking, append-only ledger, rate-limit abort, and reporting. | LLM Client | New — motivated by Phosphene cost incidents |
 | Prompt Regression | Reusable prompt regression test framework: scenario loading, JSON path property checks, LLM judging, and run reporting with consumer-provided module dispatch. | none (leaf; injected LLM client protocol) | Extracted from diplomat tests/prompt_regression |
 | Structured LLM | Reusable call LLM, parse JSON, and validate schema helpers with an injected LLM client protocol. | none (leaf; injected LLM client protocol) | Extracted from diplomat modules |
+| Gateway | Multi-platform message bus (inbound + outbound). Adapter registry with Telegram (via toolkit/telegram_client), log, and fake adapters. Feedback signal dispatch (reactions/replies/edits). | toolkit/telegram_client (optional, for telegram adapter) | Extracted from Phosphene 2026-06 |
+| Source Ingestion | Adapter framework for pulling content into a uniform `ContentItem`. Concrete adapters: RSS, Telegram channel, Reddit, human-share DM, corpus importers (LiveJournal, Blogspot, plain text, Facebook). Durable last-seen markers. URL fetching with normalization. | none (leaf) | Extracted from Phosphene 2026-06 |
+| Feedback Collector | Normalises platform feedback signals (reactions, replies, silence, forwards) into structured `FeedbackEvent`s written to a memory store. Output tracking, bounded pruning, silence detection. Memory store contract is duck-typed (see ARCH_feedback_collector.md). | (consumer-supplied memory store; structural contract only) | Extracted from Phosphene 2026-06 |
 
 ## Data Flow
 
@@ -50,10 +53,16 @@ Diplomat:        Prompt scenarios → Prompt Regression → diplomat module call
 | 6 | Cost Accountant | Wraps LLM Client. Budget enforcement, cost ledger, rate-limit abort. Prerequisite for Phosphene LLM resume. | Complete |
 | 7 | Prompt Regression | Leaf test framework extracted from diplomat so prompt behavior checks can be reused by Diplomat and Phosphene. | Complete |
 | 8 | Structured LLM | Leaf helper module for repeated LLM JSON extraction and schema validation patterns shared across Diplomat and future consumers. | In progress |
+| 9 | Gateway | Multi-platform message bus extracted from Phosphene. Telegram + log + fake adapters; inbound + outbound; feedback signal dispatch. | Complete — extracted 2026-06 |
+| 10 | Source Ingestion | Adapter framework + RSS/Telegram channel/Reddit/human-share/corpus importers extracted from Phosphene. | Complete — extracted 2026-06 |
+| 11 | Feedback Collector | Platform signal normalisation extracted from Phosphene. Memory store contract is duck-typed (no toolkit-cross-import). | Complete — extracted 2026-06 |
 
 ## Coupling Notes
 
-- **No cross-dependencies** (with one exception). Toolkit modules never import from each other — except Cost Accountant, which wraps LLM Client. This is the only cross-module dependency. It's one-way, optional, and consumers that don't need cost tracking use LLM Client directly.
+- **No cross-dependencies** (with two documented exceptions). Toolkit modules never import from each other — except:
+  1. **Cost Accountant** wraps **LLM Client** (one-way, optional).
+  2. **Gateway**'s telegram adapter optionally imports **toolkit.telegram_client** (one-way, optional; gateway works without it for log/fake adapters and accepts a consumer-supplied telegram client factory).
+  Consumers that don't need cost tracking use LLM Client directly. Consumers that don't need Telegram delivery don't trigger the telegram-client import.
 - **Shared types are local.** Each module defines its own types.py. No shared types package across toolkit modules.
 - **Prompt Regression LLM access is injected.** The judge uses an llm_client-shaped object supplied by the consumer, so the module does not import LLM Client directly.
 - **Structured LLM access is injected.** Structured completion uses an llm_client-shaped object supplied by the consumer, so the module does not import LLM Client directly.
@@ -80,6 +89,12 @@ Date: 2026-04-04 | Status: Closed
 Decision: Embedding model, clustering strategy, and LLM provider are configuration parameters. Consumers specify what they want; toolkit modules handle the dispatch.
 Rationale: Consumers should not need code changes when switching models or strategies. This is the primary value of the abstraction.
 Revisit if: A new model/strategy requires a fundamentally different interface (not just different parameters).
+
+D-4: Feedback Collector decouples from Phosphene's memory model via duck typing
+Date: 2026-06-02 | Status: Closed
+Decision: When `feedback_collector` was extracted from Phosphene, its prior static import of `NoteInput` / `NotePatch` from `phosphene.memory_store` was replaced with internal `_NoteInput` / `_NotePatch` dataclasses defined in `toolkit.feedback_collector.types`. The internal dataclasses mirror Phosphene's field names and types exactly. The collector requires a `memory_store` instance that structurally supports `get_note(id)`, `store_note(note)`, and `update_note(id, patch)` — Phosphene's `MemoryStore` satisfies this by duck typing, with no Phosphene-side wiring change.
+Rationale: Avoids introducing a `toolkit.feedback_collector → phosphene.memory_store` cross-project import, which would violate the consumer-coupling direction (toolkit never imports from consumer projects). Avoids introducing a `toolkit.feedback_collector → toolkit.memory_store` cross-module dep, which would violate D-1. Duck typing keeps the contract honest without locking the consumer to a specific note shape.
+Revisit if: The internal `_NoteInput` / `_NotePatch` shapes drift from real consumer memory APIs and need to become a proper exported Protocol with declared methods.
 
 ## Provisional Contracts
 

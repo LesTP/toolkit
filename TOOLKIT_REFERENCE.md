@@ -20,6 +20,14 @@ Location: `c:\Users\myeluashvili\claude-code-workspace\projects\toolkit\`
 | `toolkit.telegram_client` | `from toolkit.telegram_client import ...` | Async Telegram Bot API client — polling, sending, inline keyboards, MarkdownV2 formatting |
 | `toolkit.json_rpc` | `from toolkit.json_rpc import ...` | JSON-RPC 2.0 client over stdio — subprocess lifecycle, request/response correlation, notifications |
 | `toolkit.llm_client` | `from toolkit.llm_client import ...` | Provider-agnostic LLM client — Anthropic, OpenAI, Gemini with unified interface |
+| `toolkit.embedding` | `from toolkit.embedding import ...` | Text → vector embeddings with disk/in-memory cache, batch encoding |
+| `toolkit.clustering` | `from toolkit.clustering import ...` | Semantic clustering — HDBSCAN, RAPTOR strategies; UMAP dimensionality reduction |
+| `toolkit.cost_accountant` | `from toolkit.cost_accountant import ...` | LLM cost ledger, budget enforcement, pre-call estimation, rate-limit abort |
+| `toolkit.prompt_regression` | `from toolkit.prompt_regression import ...` | Prompt regression test framework — scenarios, JSON path checks, LLM judging |
+| `toolkit.structured_llm` | `from toolkit.structured_llm import ...` | LLM JSON extraction with schema validation |
+| `toolkit.gateway` | `from toolkit.gateway import ...` | Multi-platform message bus — Telegram, log, fake adapters; inbound + outbound; feedback signals |
+| `toolkit.source_ingestion` | `from toolkit.source_ingestion import ...` | Content adapter framework — RSS, Telegram channel, Reddit, human-share DM, corpus importers (LiveJournal, Blogspot, plain text, Facebook) |
+| `toolkit.feedback_collector` | `from toolkit.feedback_collector import ...` | Normalises platform feedback (reactions/replies/silence) into structured events written to a memory store |
 
 ---
 

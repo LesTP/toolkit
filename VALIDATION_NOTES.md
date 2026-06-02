@@ -36,6 +36,20 @@ Checked against `phosphene/ARCHITECTURE.md`.
 
 **One provisional contract:** RAPTOR clustering strategy requires the consumer to provide a summarizer callback. The interface is defined but the interaction pattern (clustering calls summarizer, which calls llm_client) hasn't been tested in a real pipeline. This is the highest-risk integration point and should be tested early in Phosphene's distillation implementation.
 
+### Modules extracted from Phosphene → Toolkit (2026-06-02)
+
+Three modules were lifted from `phosphene/src/phosphene/` to `toolkit/src/toolkit/`:
+
+| Module | Public API | Phosphene-side change |
+|--------|-----------|----------------------|
+| `gateway` | Unchanged | Imports rewritten in `generator/generator.py`, `generator/router.py`, `run.py` |
+| `source_ingestion` | Unchanged | Imports rewritten in `run.py`, `tools/check_id_collisions{,2}.py`, `tools/check_timestamps.py` |
+| `feedback_collector` | Unchanged (now uses internal `_NoteInput` / `_NotePatch` matching Phosphene's `NoteInput` / `NotePatch` field shape, see D-4) | No wiring change — `MemoryStore` accepts the internal note shapes via duck typing |
+
+Phosphene now consumes these as `from toolkit.<module> import ...`. `phosphene/ARCH_<module>.md` files are stubs pointing at the toolkit ARCH equivalents. Test directories moved accordingly: 50 + 69 + 22-of-25 (3 pre-existing datetime failures, see Phosphene `DESIGN_GLOBAL.md`) tests now live in `toolkit/tests/`.
+
+The `feedback_collector` integration test that exercises real Phosphene `Generator` + `MemoryStore` + `FeedbackCollector` wiring stays in `phosphene/tests/feedback_collector/` — it's a Phosphene wiring test, not a toolkit unit test.
+
 ## Toolkit ↔ Codexbot
 
 Checked against `codexbot/ARCHITECTURE.md` and implementation source.
