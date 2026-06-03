@@ -752,3 +752,166 @@ class TestOpenAIProviderTokenParam:
         )
         assert captured.get("max_tokens") == 2048
         assert "max_completion_tokens" not in captured
+
+
+# ---------------------------------------------------------------------------
+# OpenRouterProvider
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_openai():
+    """Build a minimal openai mock sufficient for OpenRouterProvider tests.
+
+    The real 'openai' package may not be installed in all environments.
+    We patch sys.modules so OpenRouterProvider.__init__ can import it.
+    """
+    import sys
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    if "openai" in sys.modules:
+        return None  # real package available; no patching needed
+
+    stub_response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="hello"))],
+        usage=SimpleNamespace(prompt_tokens=5, completion_tokens=3),
+        model="meta-llama/llama-3.3-70b-instruct",
+    )
+
+    fake_client = MagicMock()
+    fake_client.base_url = SimpleNamespace(host="openrouter.ai")
+    fake_client.chat.completions.create.return_value = stub_response
+
+    fake_openai = MagicMock()
+    fake_openai.OpenAI.return_value = fake_client
+    # Exception hierarchy needed for except-clause matching in provider.call()
+    fake_openai.RateLimitError = type("RateLimitError", (Exception,), {
+        "status_code": 429, "response": None,
+    })
+    fake_openai.APIStatusError = type("APIStatusError", (Exception,), {
+        "status_code": 500,
+    })
+    fake_openai.APIConnectionError = type("APIConnectionError", (Exception,), {})
+
+    sys.modules["openai"] = fake_openai
+    return fake_openai
+
+
+# Patch at import time so the module-level import inside providers.py succeeds.
+_MOCK_OPENAI = _make_mock_openai()
+
+
+class TestOpenRouterProvider:
+    """Pin the contract for OpenRouterProvider — OpenAI-compatible wrapper.
+
+    Tests use sys.modules patching when the real 'openai' package is absent,
+    which is expected in CI environments that don't install the optional dep.
+    """
+
+    @staticmethod
+    def _stub_response(content: str = "hello"):
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=content))],
+            usage=SimpleNamespace(prompt_tokens=5, completion_tokens=3),
+            model="meta-llama/llama-3.3-70b-instruct",
+        )
+
+    def _make_provider(self):
+        """Return (provider, captured_kwargs_dict) with create() intercepted."""
+        import importlib
+        import toolkit.llm_client.providers as _mod
+        importlib.reload(_mod)  # pick up sys.modules patch
+        from toolkit.llm_client.providers import OpenRouterProvider
+
+        provider = OpenRouterProvider(api_key="or-test-key")
+        captured: dict = {}
+
+        def fake_create(**kwargs):
+            captured.update(kwargs)
+            return self._stub_response()
+
+        provider._client.chat.completions.create = fake_create
+        return provider, captured
+
+    def test_constructor_uses_openrouter_base_url(self):
+        import importlib
+        import toolkit.llm_client.providers as _mod
+        importlib.reload(_mod)
+        from toolkit.llm_client.providers import OpenRouterProvider
+
+        provider = OpenRouterProvider(api_key="or-test-key")
+        assert provider._client.base_url.host == "openrouter.ai"
+
+    def test_call_returns_llm_response_with_openrouter_provider(self):
+        provider, _ = self._make_provider()
+        response = provider.call(
+            model="meta-llama/llama-3.3-70b-instruct",
+            system_prompt="You are helpful.",
+            user_prompt="Hello",
+            max_tokens=100,
+        )
+        assert isinstance(response, LLMResponse)
+        assert response.provider == "openrouter"
+        assert response.content == "hello"
+
+    def test_call_always_uses_max_tokens_not_max_completion_tokens(self):
+        """OpenRouter handles reasoning internally — always use max_tokens."""
+        provider, captured = self._make_provider()
+        provider.call(
+            model="deepseek/deepseek-v3",
+            system_prompt="sys",
+            user_prompt="usr",
+            max_tokens=512,
+        )
+        assert captured.get("max_tokens") == 512
+        assert "max_completion_tokens" not in captured
+
+    def test_rate_limit_error_surfaces_as_llm_api_error(self):
+        from types import SimpleNamespace
+        import sys
+
+        provider, _ = self._make_provider()
+        openai_mod = sys.modules["openai"]
+
+        class FakeRateLimitError(Exception):
+            status_code = 429
+            response = SimpleNamespace(headers={"retry-after": "30"})
+
+        exc = FakeRateLimitError("rate limit")
+        openai_mod.RateLimitError = FakeRateLimitError
+        provider._openai = openai_mod
+
+        provider._client.chat.completions.create = lambda **kw: (_ for _ in ()).throw(exc)
+
+        with pytest.raises(LLMAPIError) as info:
+            provider.call(
+                model="meta-llama/llama-3.3-70b-instruct",
+                system_prompt="s",
+                user_prompt="u",
+                max_tokens=50,
+            )
+        assert info.value.status_code == 429
+        assert info.value.retry_after == 30.0
+
+    def test_empty_response_raises_llm_response_error(self):
+        from types import SimpleNamespace
+
+        provider, _ = self._make_provider()
+
+        def fake_create(**kwargs):
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content="  "))],
+                usage=SimpleNamespace(prompt_tokens=1, completion_tokens=0),
+                model="meta-llama/llama-3.3-70b-instruct",
+            )
+
+        provider._client.chat.completions.create = fake_create
+
+        with pytest.raises(LLMResponseError):
+            provider.call(
+                model="meta-llama/llama-3.3-70b-instruct",
+                system_prompt="s",
+                user_prompt="u",
+                max_tokens=50,
+            )
