@@ -118,7 +118,7 @@ class ModelTier(str, Enum):
 
 @dataclass
 class LLMConfig:
-    provider: str                # "anthropic" | "openai" | "google"
+    provider: str                # "anthropic" | "openai" | "google" | "openrouter"
     api_key: str
     models: dict[str, str]       # tier name → model ID
     max_tokens: int = 4096
@@ -153,7 +153,9 @@ complete(messages: list[Message], config: LLMConfig,
 create_provider(config: LLMConfig) -> LLMProvider
 ```
 
-**Provider-specific behavior:** `OpenAIProvider.call()` internally dispatches the token-limit kwarg by model prefix — `gpt-5*` / `o1*` / `o3*` / `o4*` get `max_completion_tokens`, others get `max_tokens`. Consumers always pass `max_tokens: int` on the `LLMProvider.call()` contract; the OpenAI-side translation is internal. See `ARCH_llm_client.md` "Token-parameter dispatch."
+**Provider-specific behavior:** `OpenAIProvider.call()` internally dispatches the token-limit kwarg by model prefix — `gpt-5*` / `o1*` / `o3*` / `o4*` get `max_completion_tokens`, others get `max_tokens`. `OpenRouterProvider` always uses `max_tokens` (OpenRouter handles reasoning models internally). Consumers always pass `max_tokens: int` on the `LLMProvider.call()` contract; per-provider translation is internal. See `ARCH_llm_client.md` "Token-parameter dispatch."
+
+**OpenRouter usage:** Set `provider="openrouter"` and `api_key=OPENROUTER_API_KEY`. Model names use OpenRouter's `provider/model` format (e.g. `"meta-llama/llama-3.3-70b-instruct"`, `"deepseek/deepseek-v3"`). Pricing for representative models is in `cost_accountant/types.py`; unknown models fall through to the conservative default.
 
 ---
 
