@@ -321,7 +321,7 @@ def create_provider(config: LLMConfig) -> LLMProvider:
     """Create an LLM provider from config.
 
     Dispatches on config.provider. Currently supports "anthropic",
-    "openai", and "google".
+    "openai", "google", and "openrouter".
 
     Raises:
         ValueError: Unknown provider name.
@@ -332,9 +332,11 @@ def create_provider(config: LLMConfig) -> LLMProvider:
         return OpenAIProvider(api_key=config.api_key)
     if config.provider == "google":
         return GeminiProvider(api_key=config.api_key)
+    if config.provider == "openrouter":
+        return OpenRouterProvider(api_key=config.api_key)
     raise ValueError(
         f"Unknown LLM provider: {config.provider!r}. "
-        f"Supported providers: anthropic, openai, google"
+        f"Supported providers: anthropic, openai, google, openrouter"
     )
 
 
