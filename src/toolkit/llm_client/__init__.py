@@ -23,6 +23,7 @@ from toolkit.llm_client.providers import (
     GeminiProvider,
     LLMProvider,
     OpenAIProvider,
+    OpenRouterProvider,
     complete,
     complete_with_retry,
     create_provider,
@@ -50,6 +51,7 @@ __all__ = [
     "LLMProvider",
     "AnthropicProvider",
     "OpenAIProvider",
+    "OpenRouterProvider",
     "GeminiProvider",
     "create_provider",
 ]

@@ -243,6 +243,80 @@ class OpenAIProvider(LLMProvider):
         )
 
 
+class OpenRouterProvider(OpenAIProvider):
+    """LLM provider backed by the OpenRouter OpenAI-compatible API."""
+
+    def __init__(self, api_key: str):
+        try:
+            import openai as _openai
+        except ImportError:
+            raise ImportError(
+                "The 'openai' package is required for OpenRouterProvider. "
+                "Install it with: pip install toolkit[openai]"
+            )
+        self._openai = _openai
+        self._client = _openai.OpenAI(
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1",
+        )
+
+    def call(
+        self,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int,
+        temperature: float = 0.7,
+    ) -> LLMResponse:
+        try:
+            response = self._client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        except self._openai.RateLimitError as e:
+            retry_after = None
+            if e.response is not None:
+                retry_header = e.response.headers.get("retry-after")
+                if retry_header is not None:
+                    try:
+                        retry_after = float(retry_header)
+                    except (ValueError, TypeError):
+                        pass
+            raise LLMAPIError(
+                str(e),
+                status_code=e.status_code,
+                retry_after=retry_after,
+            ) from e
+        except self._openai.APIStatusError as e:
+            raise LLMAPIError(
+                str(e),
+                status_code=e.status_code,
+            ) from e
+        except self._openai.APIConnectionError as e:
+            raise LLMAPIError(str(e)) from e
+
+        choice = response.choices[0] if response.choices else None
+        if not choice or not choice.message or not choice.message.content\
+                or not choice.message.content.strip():
+            raise LLMResponseError("Empty response content from OpenRouter API")
+
+        usage = response.usage
+        return LLMResponse(
+            content=choice.message.content,
+            model=response.model,
+            provider="openrouter",
+            token_usage=TokenUsage(
+                input_tokens=usage.prompt_tokens if usage else 0,
+                output_tokens=usage.completion_tokens if usage else 0,
+            ),
+        )
+
+
 def create_provider(config: LLMConfig) -> LLMProvider:
     """Create an LLM provider from config.
 
