@@ -320,6 +320,22 @@ class TestCreateProvider:
         with pytest.raises(ValueError, match="Unknown LLM provider"):
             create_provider(config)
 
+    def test_openrouter_factory_returns_openrouter_provider(self):
+        """create_provider("openrouter") returns OpenRouterProvider.
+
+        Verifies the step-30.2 factory branch without a live API call.
+        The sys.modules mock from _make_mock_openai() (module-level) makes
+        OpenRouterProvider constructible even without the openai package.
+        """
+        import importlib
+        import toolkit.llm_client.providers as _mod
+        importlib.reload(_mod)
+        from toolkit.llm_client.providers import OpenRouterProvider
+
+        config = LLMConfig(provider="openrouter", api_key="or-test-key")
+        provider = create_provider(config)
+        assert isinstance(provider, OpenRouterProvider)
+
 
 # ---------------------------------------------------------------------------
 # Error types
