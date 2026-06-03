@@ -38,6 +38,14 @@ DEFAULT_PRICING: Dict[str, ModelPricing] = {
     "gemini-2.5-flash-lite": ModelPricing(0.1, 0.4),
     "gemini-2.5-flash": ModelPricing(0.3, 2.5),
     "gemini-2.5-pro": ModelPricing(1.25, 10.0),
+    # OpenRouter (provider/model format — OpenRouter pass-through pricing)
+    # Prices are OpenRouter's published rates; unknown models fall through to
+    # the conservative default (15.0/75.0) in CostAccountant.estimate_cost().
+    "deepseek/deepseek-v3": ModelPricing(0.27, 1.10),
+    "groq/llama-3.3-70b": ModelPricing(0.59, 0.79),
+    "mistralai/mistral-large": ModelPricing(2.0, 6.0),
+    "meta-llama/llama-3.3-70b-instruct": ModelPricing(0.0, 0.0),       # free tier
+    "meta-llama/llama-3.3-70b-instruct:free": ModelPricing(0.0, 0.0),  # explicit free suffix
 }
 
 
