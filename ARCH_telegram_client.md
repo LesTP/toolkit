@@ -21,12 +21,14 @@ The primary interface. Holds the transport and provides all operations — sendi
 - **Signature:** `async def send_message(self, chat_id: str | int, text: str, *, parse_mode: str = "MarkdownV2", disable_web_preview: bool = False, reply_to: int | None = None) -> SendResult`
 - **Parameters:**
   - chat_id: str | int — Telegram chat/channel ID (e.g., `"@channel_name"` or numeric)
-  - text: str — message content. Must be non-empty, ≤ 4096 chars after formatting.
-  - parse_mode: str — `"MarkdownV2"`, `"HTML"`, or `""` for plain text
+  - text: str — message content. **Auto-chunked at the 4096-char limit** via `split_message` (paragraph-first with `[continued ...]` markers); any length is accepted, see Auto-Chunking below.
+  - parse_mode: str — `"MarkdownV2"`, `"HTML"`, or `""` for plain text. Applied to **every** chunk when auto-chunking fires.
   - disable_web_preview: bool — suppress link previews
-  - reply_to: int | None — message ID to reply to
-- **Returns:** SendResult
+  - reply_to: int | None — message ID to reply to. Applied **only to the first chunk** when auto-chunking fires (continuation chunks are not replies).
+- **Returns:** SendResult (single message_id; the LAST one if auto-chunking produced multiple sends — return type stays `int` for backward compatibility)
 - **Errors:** `TelegramAPIError`
+
+**Auto-Chunking (since Phase 32, 2026-06-04):** `send_message` accepts arbitrarily long text. When `len(text) > TELEGRAM_MESSAGE_LIMIT (4096)`, the implementation calls `split_message(text)` and issues one `sendMessage` API call per chunk serially. Chunks 2+ are prefixed with `CONTINUATION_PREFIX = "[continued ...]\n\n"`. An `INFO`-level log records the chunk count. Callers that want explicit per-chunk control should call `split_message()` directly and loop. `send_with_keyboard` and `edit_message` do **not** auto-chunk — they retain the strict 4096-char `ValueError`.
 
 **send_with_keyboard**
 - **Signature:** `async def send_with_keyboard(self, chat_id: str | int, text: str, keyboard: InlineKeyboard, *, parse_mode: str = "MarkdownV2") -> SendResult`
@@ -107,7 +109,10 @@ These are standalone functions — no client instance needed.
 
 **split_message**
 - **Signature:** `def split_message(text: str, *, limit: int = 4096) -> list[str]`
-- Splits text into chunks that fit Telegram's message length limit. Splits at newline boundaries when possible, falls back to hard splits. Always returns at least one chunk.
+- Splits text into Telegram-sized chunks. **Paragraph-first** (`\n\n`), falls back to line boundaries (`\n`), then to hard character chunks for single oversized lines. Chunks 2+ are prefixed with `CONTINUATION_PREFIX` so operators can see continuations at a glance. Inputs ≤ `limit` return a single unmarked chunk. Used internally by `TelegramClient.send_message` for auto-chunking; exposed publicly for callers that want explicit per-chunk control before sending.
+
+**CONTINUATION_PREFIX**
+- Module-level constant: `"[continued ...]\n\n"`. Prepended to every non-first chunk produced by `split_message`. Exported from `toolkit.telegram_client` for callers that need to detect or strip the marker.
 
 ### TelegraphClient
 

@@ -2,6 +2,7 @@
 
 from .client import TelegramClient
 from .formatting import (
+    CONTINUATION_PREFIX,
     TELEGRAM_MESSAGE_LIMIT,
     escape_markdown,
     escape_url,
@@ -24,6 +25,7 @@ from .types import (
 )
 
 __all__ = [
+    "CONTINUATION_PREFIX",
     "HTTPSTransport",
     "InlineButton",
     "InlineKeyboard",

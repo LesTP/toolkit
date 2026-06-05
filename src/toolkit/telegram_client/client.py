@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import Any, Mapping
 
-from .formatting import TELEGRAM_MESSAGE_LIMIT
+from .formatting import TELEGRAM_MESSAGE_LIMIT, split_message
 from .transport import DEFAULT_REQUEST_TIMEOUT_SECONDS, HTTPSTransport, TelegramTransport
 from .types import (
     InlineKeyboard,
@@ -264,17 +264,47 @@ class TelegramClient:
         *,
         parse_mode: str | None = None,
     ) -> int:
-        """Send a Telegram message and return the resulting message ID."""
-        self._validate_message_text(text)
+        """Send a Telegram message and return the resulting message ID.
 
-        payload: dict[str, Any] = {"chat_id": int(chat_id), "text": text}
-        if reply_to is not None:
-            payload["reply_to_message_id"] = int(reply_to)
-        if parse_mode is not None:
-            payload["parse_mode"] = parse_mode
+        Auto-chunks oversized text. If ``len(text) <= TELEGRAM_MESSAGE_LIMIT``
+        a single API call is made and the message_id is returned, identical
+        to the pre-Phase-32 behavior. If the text exceeds the limit, it is
+        split via :func:`toolkit.telegram_client.split_message` (paragraph-
+        first with ``[continued ...]`` markers) and sent as N serial
+        ``sendMessage`` calls; the **last** message_id is returned to
+        preserve the ``int`` return type for callers. ``reply_to`` is
+        applied only to the FIRST chunk (subsequent chunks are continuations,
+        not replies). ``parse_mode`` is applied to every chunk.
+        """
+        self._validate_text_type(text)
 
-        response = await self.request_api("sendMessage", payload)
-        return self._extract_message_id(response)
+        if len(text) <= TELEGRAM_MESSAGE_LIMIT:
+            payload: dict[str, Any] = {"chat_id": int(chat_id), "text": text}
+            if reply_to is not None:
+                payload["reply_to_message_id"] = int(reply_to)
+            if parse_mode is not None:
+                payload["parse_mode"] = parse_mode
+            response = await self.request_api("sendMessage", payload)
+            return self._extract_message_id(response)
+
+        chunks = split_message(text, limit=TELEGRAM_MESSAGE_LIMIT)
+        LOGGER.info(
+            "send_message chunked into %d parts (chat_id=%s, total_chars=%d)",
+            len(chunks),
+            int(chat_id),
+            len(text),
+        )
+        last_message_id: int | None = None
+        for index, chunk in enumerate(chunks):
+            payload = {"chat_id": int(chat_id), "text": chunk}
+            if reply_to is not None and index == 0:
+                payload["reply_to_message_id"] = int(reply_to)
+            if parse_mode is not None:
+                payload["parse_mode"] = parse_mode
+            response = await self.request_api("sendMessage", payload)
+            last_message_id = self._extract_message_id(response)
+        assert last_message_id is not None  # split_message never returns []
+        return last_message_id
 
     async def edit_message(
         self,
@@ -340,6 +370,13 @@ class TelegramClient:
             return int(value)
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _validate_text_type(text: str) -> None:
+        """Type-only validation. Used by ``send_message`` which auto-chunks
+        and therefore doesn't impose the 4096 hard limit on inputs."""
+        if not isinstance(text, str):
+            raise TypeError("text must be a string")
 
     @staticmethod
     def _validate_message_text(text: str) -> None:
