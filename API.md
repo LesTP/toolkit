@@ -3,9 +3,9 @@
 Canonical API signatures for all toolkit modules. Use these when building fakes
 in consumer projects where toolkit is not importable.
 
-Last synced: 2026-06-02
-
 **Consumers:** Diplomat, Phosphene, Codexbot, Year-in-Search, TGBot
+
+Last synced: 2026-06-05
 
 ---
 
@@ -643,3 +643,73 @@ The `_NoteInput` / `_NotePatch` shapes are intentionally private — they mirror
 - `register_output(output, delivery)` reads `output.source_note_ids`, `output.intent_tag`, `output.output_mode` and `delivery.success`, `delivery.message_id` — structural; works with `Gateway.DeliveryResult` and `GeneratorOutput` from any consumer.
 - `process_signal(signal)` reads `signal.message_id`, `signal.signal_type`, `signal.value`, `signal.timestamp` — structural; works with `toolkit.gateway.FeedbackSignal`.
 - `check_silence()` and `_prune_old_records()` use timezone-aware `datetime.now(timezone.utc)`. Consumers must deliver `OutputRecord.delivered_at` as timezone-aware (Phosphene currently has a pre-existing naive-vs-aware mismatch; see Phosphene `DESIGN_GLOBAL.md`).
+
+---
+
+## toolkit.coaching
+**Consumers:** Diplomat
+
+### Types
+
+```python
+@dataclass(frozen=True)
+class CoachingEvent:
+    coaching_type: str          # canonical tag name (e.g. "PRIORITY", "FREE")
+    content: str
+    route: str                  # consumer-defined route id (e.g. "coaching_queue")
+
+@dataclass(frozen=True)
+class Command:
+    name: str                   # slash command without leading "/"
+    args: dict[str, Any]        # {} for most; {"text": ...} for /edit
+
+@dataclass(frozen=True)
+class RouteRule:
+    coaching_type: str
+    route: str
+```
+
+### Class
+
+```python
+class TaggedCoachingParser:
+    def __init__(self, routes_path: str | Path) -> None
+        # Loads YAML config from disk (lazy-imports yaml).
+    @classmethod
+    def from_config(cls, config: dict[str, Any]) -> TaggedCoachingParser
+        # Dependency-free constructor. Pass an already-parsed config dict.
+    def parse(self, raw_input: str) -> CoachingEvent | Command
+        # Returns Command if input matches a known slash command.
+        # Returns CoachingEvent on tagged or untagged free text.
+        # Tag matching is case-insensitive.
+```
+
+### Module-level helpers
+
+```python
+def load_routes_config(routes_path: str | Path) -> dict[str, Any]
+    # YAML loader. Raises ImportError if pyyaml is not installed, with a hint
+    # to use TaggedCoachingParser.from_config(dict) instead.
+```
+
+### Config schema
+
+```yaml
+tags:
+  <TAG_NAME>:
+    route: <consumer-defined-route-id>
+    coaching_type: <canonical-name>
+  default:              # required
+    route: ...
+    coaching_type: ...
+commands:
+  - /<command_name>
+  - ...
+```
+
+### Notes
+- Tags are case-insensitive (`priority:` and `PRIORITY:` route identically).
+- The `default` tag entry is required — it handles untagged, unknown-tag, and malformed-tag input.
+- Unknown slash commands return `CoachingEvent` (default route), not `Command` — so unknown commands aren't silently dropped.
+- `/edit` is special-cased: the rest of the line is captured as `args["text"]`. All other commands return `args={}`.
+- `load_routes_config()` requires `pyyaml`. Consumers that don't want a YAML dep can build their own config dict and call `TaggedCoachingParser.from_config(dict)`.

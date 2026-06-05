@@ -44,7 +44,11 @@ async def main():
     safe = escape_markdown("Score: 4.5 (out of 5)")
     await client.send_message(chat_id=42, text=safe, parse_mode="MarkdownV2")
 
-    # Split long text at line boundaries (respects Telegram's 4096-char limit)
+    # send_message auto-chunks at 4096 chars (paragraph-first, with
+    # `[continued ...]` markers on chunks 2+). Returns the LAST message_id.
+    await client.send_message(chat_id=42, text=long_text)
+
+    # For explicit per-chunk control before sending, call split_message yourself:
     for chunk in split_message(long_text):
         await client.send_message(chat_id=42, text=chunk)
 
@@ -107,7 +111,8 @@ format_link("Click here", url)       # "[Click here](https://...)"
 | `TelegramAPIError` | exception | Telegram returned an error response |
 | `HTTPSTransport` | class | Default HTTP transport (urllib, no deps) |
 | `TelegramTransport` | Protocol | Transport interface for testing/mocking |
-| `split_message()` | function | Split text at line boundaries within a char limit |
+| `split_message()` | function | Paragraph-first split into Telegram-sized chunks with `[continued ...]` markers on chunks 2+ |
+| `CONTINUATION_PREFIX` | str | `"[continued ...]\n\n"` — marker prepended to non-first chunks |
 | `escape_markdown()` | function | Escape MarkdownV2 special characters |
 | `escape_url()` | function | Escape `)` and `\` inside inline URLs |
 | `format_link()` | function | Build `[text](url)` with proper escaping |
@@ -301,6 +306,341 @@ print(f"{response.provider}/{response.model}: {response.content[:80]}...")
 
 ---
 
+### `toolkit.cost_accountant`
+
+Cost ledger and budget enforcement that wraps `toolkit.llm_client`. Pre-call estimation, per-call / operation / session budgets, append-only JSONL ledger, rate-limit and spending-cap abort.
+
+#### Quick start
+
+```python
+from pathlib import Path
+from toolkit.cost_accountant import CostAccountant, CostBudget
+from toolkit.llm_client import LLMConfig, Message, ModelTier
+
+accountant = CostAccountant(
+    ledger_path=Path("./logs/cost_ledger.jsonl"),
+    default_budget=CostBudget(
+        operation_name="default",
+        operation_budget_usd=25.0,
+        session_budget_usd=25.0,
+        per_call_max_usd=2.0,
+    ),
+)
+
+config = LLMConfig(
+    provider="anthropic",
+    api_key="sk-ant-...",
+    models={"quality": "claude-sonnet-4-5-20250929"},
+)
+
+response = accountant.complete(
+    messages=[Message(role="user", content="Summarize this: ...")],
+    config=config,
+    tier=ModelTier.QUALITY,
+    attribution="my_pipeline",
+)
+print(f"Spent so far: ${accountant.session_total:.4f}")
+```
+
+#### Pre-call estimation
+
+```python
+estimate = accountant.estimate_cost(
+    model="claude-sonnet-4-5-20250929",
+    input_tokens=2500,
+    expected_output_tokens=800,
+)
+print(f"Estimated: ${estimate.total_usd:.4f}")
+```
+
+#### Reporting
+
+```python
+from datetime import datetime, timedelta
+
+report = accountant.report(since=datetime.now() - timedelta(days=7))
+print(report)  # CostReport over last 7 days
+```
+
+#### Public API
+
+| Symbol | Kind | Description |
+|--------|------|-------------|
+| `CostAccountant` | class | Budget-checked completion wrapper around LLM Client |
+| `CostBudget` | dataclass | Operation/session/per-call limits and abort flags |
+| `CostEstimate` | dataclass | Single-call estimate (input/output cost + total) |
+| `BatchEstimate` | dataclass | Batch estimate with per-call breakdown |
+| `CallEstimate` | dataclass | One labeled call in a batch estimate |
+| `LedgerEntry` | dataclass | One JSONL ledger row (model, tokens, cost, attribution) |
+| `CostReport` | dataclass | Aggregated historical ledger report |
+| `ModelPricing` | dataclass | `input_per_mtok`, `output_per_mtok` |
+| `DEFAULT_PRICING` | dict | Built-in pricing for known Anthropic/OpenAI/Gemini models |
+| `normalize_model_name()` | function | Strip date-snapshot suffixes for pricing lookup |
+| `CostAccountantError` | exception | Base error class |
+| `BudgetExceededError` | exception | Pre-call estimate exceeds a budget |
+| `PerCallBudgetError` | exception | Estimate exceeds `per_call_max_usd` |
+| `OperationBudgetError` | exception | Operation cumulative spend exceeds budget |
+| `SessionBudgetError` | exception | Session cumulative spend exceeds budget |
+| `SpendingCapAbortError` | exception | Hard spending cap hit |
+| `RateLimitAbortError` | exception | Provider rate-limit response triggered abort |
+| `UnknownModelError` | exception | Model not in pricing table and no fallback wanted |
+
+---
+
+### `toolkit.structured_llm`
+
+LLM JSON extraction with schema injection, validation, and bounded retry. Designed to wrap an injected `llm_client` (typically `toolkit.llm_client`); does not import a provider directly.
+
+#### Quick start
+
+```python
+import asyncio
+from toolkit import llm_client
+from toolkit.structured_llm import structured_call, Example
+
+schema = {
+    "type": "object",
+    "required": ["title", "tags"],
+    "properties": {
+        "title": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string"}},
+    },
+}
+
+async def main():
+    result = await structured_call(
+        llm_client=llm_client,
+        config={"provider": "anthropic", "api_key": "sk-ant-...",
+                "models": {"commodity": "claude-haiku-4-5-20251001"}},
+        tier="commodity",
+        schema=schema,
+        system_prompt="Extract a title and tags from the user's text.",
+        user_prompt="A short essay about gardening in early spring...",
+        examples=[
+            Example(input="A note about coffee.",
+                    output={"title": "Coffee", "tags": ["beverage"]}),
+        ],
+        max_retries=2,
+    )
+    if result.success:
+        print(result.data)            # validated dict
+    else:
+        print(result.error, result.raw)
+
+asyncio.run(main())
+```
+
+#### Low-level primitives
+
+```python
+from toolkit.structured_llm import (
+    structured_complete, parse_json_response, validate_json_schema,
+    load_prompt, load_schema,
+)
+
+# Stop at any layer of the pipeline if you want manual control
+raw = await structured_complete(llm_client, config, "commodity", messages)
+data = parse_json_response(raw)
+validate_json_schema(data, schema, label="my_extractor")
+```
+
+#### Public API
+
+| Symbol | Kind | Description |
+|--------|------|-------------|
+| `Example` | dataclass | Few-shot example pair (`input`, `output`) |
+| `StructuredResult` | dataclass | `success`, `data`, `raw`, `retries`, `error` |
+| `structured_call()` | async function | Full pipeline: prompt assembly + schema + examples + retry |
+| `structured_complete()` | async function | Raw LLM call with messages (no parsing) |
+| `parse_json_response()` | function | Extract a JSON object from a model response string |
+| `validate_json_schema()` | function | Validate a parsed dict against a JSON Schema |
+| `load_prompt()` | function | Read a prompt template from a file |
+| `load_schema()` | function | Read a JSON Schema from a file |
+
+---
+
+### `toolkit.prompt_regression`
+
+Scenario-based prompt regression test framework. Loads scenarios from JSON files, dispatches each to a consumer-provided async module callback, then evaluates the response via JSON path checks and/or LLM-as-judge.
+
+#### Quick start
+
+```python
+import asyncio
+from toolkit import llm_client
+from toolkit.prompt_regression import ScenarioRunner
+
+async def call_my_module(module_name: str, payload, context: dict):
+    # Consumer dispatches to whatever module the scenario names
+    if module_name == "extractor":
+        return await my_extractor(payload, **context)
+    raise ValueError(module_name)
+
+async def main():
+    runner = ScenarioRunner(
+        llm_client=llm_client,
+        llm_config={"provider": "anthropic", "api_key": "sk-ant-...",
+                    "models": {"commodity": "claude-haiku-4-5-20251001"}},
+        module_caller=call_my_module,
+    )
+    report = await runner.run_all("./scenarios/", module_filter="extractor")
+    print(f"{report.passed}/{report.total} scenarios passed")
+    for r in report.results:
+        if not r.passed:
+            print(f"  FAIL {r.scenario_id}")
+            for p in r.properties:
+                if not p.passed:
+                    print(f"    - {p.description}")
+
+asyncio.run(main())
+```
+
+#### Scenario shape
+
+Scenarios are plain JSON files. Each declares a module to call, an input payload, and a list of property checks (any mix of `json_path_exists`, `json_path_equals`, `llm_judge`).
+
+```json
+{
+  "scenario_id": "extract-tags-from-essay",
+  "description": "Extractor returns at least one tag for a short essay",
+  "module": "extractor",
+  "input": "A short essay about gardening...",
+  "properties": [
+    {"type": "json_path_exists", "description": "has tags", "path": "$.tags"},
+    {"type": "llm_judge", "description": "tags are relevant",
+     "criteria": "Tags should describe the essay's subject.",
+     "pass_instruction": "Return PASS if any tag relates to gardening.",
+     "fail_instruction": "Return FAIL if all tags are unrelated."}
+  ]
+}
+```
+
+#### Public API
+
+| Symbol | Kind | Description |
+|--------|------|-------------|
+| `ScenarioRunner` | class | Loads scenarios, dispatches to consumer module, evaluates properties |
+| `LLMJudge` | class | LLM-backed verdict on a response against criteria |
+| `JudgeResult` | dataclass | `verdict` ("PASS"/"FAIL"), `explanation`, `criteria` |
+| `PropertyCheck` | dataclass | A single check (type + path/value/criteria) |
+| `PropertyResult` | dataclass | Outcome of one check (passed, expected, actual) |
+| `ScenarioResult` | dataclass | Aggregated property results for one scenario |
+| `RunReport` | dataclass | Full run: `results`, `total`, `passed` |
+| `ModuleCaller` | Protocol | `async (module_name, payload, context) -> Any` |
+| `PROPERTY_TYPES` | tuple | Allowed values for `PropertyCheck.type` |
+| `load_scenario()` | function | Load one scenario JSON file |
+| `load_scenarios()` | function | Load all scenarios in a directory |
+| `json_path_exists()` | function | True if a JSONPath resolves in `data` |
+| `json_path_get()` | function | Resolve a JSONPath against `data` |
+
+---
+
+### `toolkit.embedding`
+
+Text → vector embeddings with disk/in-memory caching. Currently uses `sentence-transformers` (e.g. `all-MiniLM-L6-v2`).
+
+> Requires `pip install sentence-transformers numpy` (not declared as toolkit extras yet — install alongside).
+
+#### Quick start
+
+```python
+from toolkit.embedding import embed, EmbeddingConfig, similarity, batch_similarity
+
+config = EmbeddingConfig(
+    model="all-MiniLM-L6-v2",
+    batch_size=256,
+    cache_dir="./cache/embeddings",
+    device="cpu",
+)
+
+texts = ["A cat sleeps on the couch.", "Felines napping on furniture.",
+         "Quarterly revenue grew 12%."]
+result = embed(texts, config)
+
+print(result.vectors.shape)       # (3, 384)
+print(f"cache hits: {result.from_cache} / computed: {result.computed}")
+
+# Pairwise similarity
+print(similarity(result.vectors[0], result.vectors[1]))   # ~0.7
+
+# Rank candidates against a query vector
+scores = batch_similarity(result.vectors[0], result.vectors[1:])
+```
+
+#### Public API
+
+| Symbol | Kind | Description |
+|--------|------|-------------|
+| `embed()` | function | Encode a list of texts → `EmbeddingResult` |
+| `similarity()` | function | Cosine similarity between two vectors |
+| `batch_similarity()` | function | Rank candidates by similarity to a query vector |
+| `EmbeddingConfig` | dataclass | `model`, `batch_size`, `cache_dir`, `device` |
+| `EmbeddingResult` | dataclass | `vectors` (ndarray), `model`, `dimension`, `from_cache`, `computed` |
+| `EmbeddingModelError` | exception | Model not found or failed to load |
+| `EmbeddingInputError` | exception | Input validation failed (empty / non-string) |
+
+---
+
+### `toolkit.clustering`
+
+Semantic clustering over embeddings. Supports HDBSCAN (flat) and RAPTOR (recursive tree-of-summaries) strategies, with optional UMAP dimensionality reduction.
+
+> Requires `pip install numpy hdbscan` (and `umap-learn` if you set `reduce_dims`). Lazy-imported inside `cluster()`.
+
+#### Quick start
+
+```python
+import numpy as np
+from toolkit.clustering import cluster, ClusterConfig, ClusterStrategy
+
+vectors = np.random.rand(200, 384).astype(np.float32)  # 200 items, 384-dim
+config = ClusterConfig(
+    strategy=ClusterStrategy.HDBSCAN,
+    min_cluster_size=5,
+    min_samples=3,
+    metric="euclidean",
+    reduce_dims=50,   # UMAP down to 50d before clustering
+)
+
+result = cluster(vectors, config)
+print(f"{result.n_clusters} clusters, {result.n_noise} noise items")
+print(result.labels[:10])    # per-item cluster id (-1 = noise)
+```
+
+#### RAPTOR (recursive tree-of-summaries)
+
+```python
+from toolkit.clustering import cluster, ClusterConfig, ClusterStrategy
+
+config = ClusterConfig(
+    strategy=ClusterStrategy.RAPTOR,
+    min_cluster_size=5,
+    raptor_max_depth=3,
+    raptor_summarizer=my_summarizer,   # Callable[[list[str]], str]
+    raptor_embedder=my_embedder,       # Callable[[list[str]], np.ndarray]
+)
+result = cluster(vectors, config, texts=my_texts)
+for layer in result.tree:
+    print(f"depth={layer.depth}  clusters={len(layer.cluster_ids)}")
+    if layer.summaries:
+        for cid, summary in layer.summaries.items():
+            print(f"  [{cid}] {summary[:80]}")
+```
+
+#### Public API
+
+| Symbol | Kind | Description |
+|--------|------|-------------|
+| `cluster()` | function | Embeddings → `ClusterResult` (labels + optional tree) |
+| `ClusterConfig` | dataclass | Strategy, sizing, metric, UMAP reduction, RAPTOR knobs |
+| `ClusterResult` | dataclass | `labels`, `n_clusters`, `n_noise`, `strategy`, optional `tree` |
+| `ClusterStrategy` | Enum | `HDBSCAN`, `RAPTOR` |
+| `ClusterLayer` | dataclass | One RAPTOR tree level (`depth`, `cluster_ids`, `summaries`) |
+| `ClusterInputError` | exception | Input validation failed |
+| `ClusterStrategyError` | exception | Unsupported or misconfigured strategy |
+
+---
+
 ### `toolkit.gateway`
 
 Multi-platform message bus for both inbound and outbound communication. Adapter registry with Telegram (backed by `toolkit.telegram_client`), log, and fake adapters. Feedback signal dispatch (reactions, replies, edits).
@@ -474,6 +814,76 @@ The `_NoteInput` / `_NotePatch` shapes are private — they mirror Phosphene's `
 
 ---
 
+### `toolkit.coaching`
+
+Tag-based operator-input parser. Parses `TAG: content` notes into `CoachingEvent` (routed to a consumer with a canonical type) and `/command args` into typed `Command` objects. Tag vocabulary and command list are loaded from a YAML config. Core stays dependency-free — PyYAML is lazy-imported only inside `load_routes_config`.
+
+#### Quick start
+
+```python
+from toolkit.coaching import TaggedCoachingParser, CoachingEvent, Command
+
+# Load from YAML config (requires pyyaml)
+parser = TaggedCoachingParser("config/coaching_routes.yaml")
+
+# Or pass a config dict directly (no yaml dep needed)
+parser = TaggedCoachingParser.from_config({
+    "tags": {
+        "default": {"route": "coaching_queue", "coaching_type": "FREE"},
+        "INTEL":   {"route": "state_updater",  "coaching_type": "INTEL"},
+    },
+    "commands": ["/preview", "/edit"],
+})
+
+# Parse and dispatch
+match parser.parse(operator_input):
+    case Command(name=name, args=args):
+        handle_command(name, args)
+    case CoachingEvent(route="state_updater", content=text):
+        update_state_from_intel(text)
+    case CoachingEvent(route="coaching_queue", coaching_type=tag, content=text):
+        queue_for_next_response(tag, text)
+```
+
+#### Config format
+
+```yaml
+tags:
+  PRIORITY:
+    route: coaching_queue
+    coaching_type: PRIORITY
+  INTEL:
+    route: state_updater
+    coaching_type: INTEL
+  default:                # required — handles untagged / unknown-tag input
+    route: coaching_queue
+    coaching_type: FREE
+commands:
+  - /preview
+  - /approve
+  - /edit
+  - /block
+```
+
+#### Public API
+
+| Symbol | Kind | Description |
+|--------|------|-------------|
+| `TaggedCoachingParser` | class | `__init__(routes_path)` (YAML), `from_config(dict)` (no dep), `parse(text)` |
+| `CoachingEvent` | dataclass | `coaching_type`, `content`, `route` — routed coaching note |
+| `Command` | dataclass | `name`, `args` — parsed slash command |
+| `RouteRule` | dataclass | `coaching_type`, `route` — one config entry |
+| `load_routes_config` | function | YAML file → dict (lazy-imports `yaml`) |
+
+Notes:
+
+- Tag matching is case-insensitive.
+- Untagged, unknown-tag, and malformed-tag input all fall through to the `default` route.
+- Unknown slash commands return `CoachingEvent` (default route) so they're not silently dropped.
+- `/edit` is special-cased: trailing text becomes `args["text"]`. Other commands return `args={}`.
+
+---
+
 ## Project structure
 
 ```
@@ -481,10 +891,31 @@ toolkit/
 ├── pyproject.toml
 └── src/toolkit/
     ├── __init__.py
+    ├── embedding/
+    │   ├── __init__.py            Public re-exports
+    │   ├── types.py               EmbeddingConfig, EmbeddingResult, error classes
+    │   └── core.py                embed, similarity, batch_similarity
+    ├── clustering/
+    │   ├── __init__.py            Public re-exports
+    │   ├── types.py               ClusterConfig, ClusterResult, ClusterStrategy, error classes
+    │   └── core.py                cluster() (lazy imports hdbscan / umap)
     ├── llm_client/
     │   ├── __init__.py            Public re-exports
     │   ├── types.py               LLMConfig, LLMResponse, error classes
-    │   └── providers.py           LLMProvider ABC, AnthropicProvider, factory
+    │   └── providers.py           LLMProvider ABC, Anthropic/OpenAI/Gemini/OpenRouter, factory
+    ├── cost_accountant/           [depends on llm_client]
+    │   ├── __init__.py            Public re-exports
+    │   ├── types.py               CostBudget, CostEstimate, LedgerEntry, ModelPricing, DEFAULT_PRICING
+    │   ├── errors.py              Cost Accountant exception hierarchy
+    │   └── core.py                CostAccountant (estimate, complete, report)
+    ├── structured_llm/
+    │   ├── __init__.py            Public re-exports
+    │   └── core.py                structured_call + low-level primitives
+    ├── prompt_regression/
+    │   ├── __init__.py            Public re-exports
+    │   ├── types.py               PropertyCheck, PropertyResult, ScenarioResult, RunReport
+    │   ├── judge.py               LLMJudge
+    │   └── runner.py              ScenarioRunner, ModuleCaller Protocol
     ├── telegram_client/
     │   ├── __init__.py            Public re-exports
     │   ├── types.py               Data types and errors
@@ -497,7 +928,7 @@ toolkit/
     │   ├── transport.py           Subprocess transport + Protocol
     │   ├── transport_ws.py        WebSocket transport (optional websockets dep)
     │   └── client.py              JsonRpcClient (correlation, routing, lifecycle)
-    ├── gateway/
+    ├── gateway/                   [optionally depends on telegram_client at runtime]
     │   ├── __init__.py            Public re-exports
     │   ├── types.py               GatewayConfig, PlatformConfig, messages, signals
     │   ├── errors.py              Gateway exception hierarchy
@@ -519,10 +950,15 @@ toolkit/
         ├── __init__.py            Public re-exports
         ├── types.py               FeedbackEvent, OutputRecord, _NoteInput, _NotePatch
         └── collector.py           FeedbackCollector (register, classify, silence)
+    └── coaching/
+        ├── __init__.py            Public re-exports
+        └── core.py                CoachingEvent, Command, RouteRule, TaggedCoachingParser, load_routes_config (yaml lazy-imported)
 ```
 
 ## Consumers
 
-- **codexbot** — uses both `telegram_client` (polling, messaging) and `json_rpc` (Codex app-server communication)
-- **TGbot** — uses `telegram_client.formatting` (escape_markdown, escape_url, format_link) and `llm_client` (LLM provider abstraction)
-- **Phosphene** — uses `gateway` (Telegram outbound + listener), `source_ingestion` (RSS, Telegram channel, corpus importers), `feedback_collector` (signal normalization wired into its own `MemoryStore` via duck-typed contract), plus `embedding`, `llm_client` (via Anthropic provider)
+- **Diplomat** — `llm_client`, `cost_accountant`, `structured_llm`, `prompt_regression`, `telegram_client`, `coaching`
+- **Phosphene** — `embedding`, `clustering`, `llm_client`, `cost_accountant`, `gateway` (Telegram outbound + listener), `source_ingestion` (RSS, Telegram channel, corpus importers), `feedback_collector` (signal normalization wired into its own `MemoryStore` via duck-typed contract)
+- **Year-in-Search** — `embedding`, `clustering`, `llm_client`
+- **codexbot** — `telegram_client` (polling, messaging), `json_rpc` (Codex app-server communication)
+- **TGbot** — `telegram_client.formatting` (escape_markdown, escape_url, format_link), `llm_client` (LLM provider abstraction)
