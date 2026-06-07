@@ -22,11 +22,11 @@ The author's own projects. Currently: Phosphene (autonomous personality agent), 
 - Prompt Regression: scenario-based prompt regression framework — JSON path checks and LLM-as-judge evaluation
 - Structured LLM: LLM JSON extraction with schema injection, validation, and retry
 - Coaching: tag-based operator-input parser — YAML-driven tag routes and slash-command vocabulary, parses to typed `CoachingEvent` / `Command`
-- Edit Classifier: LLM-as-judge categorical classifier for review-gate edit logs — `(original, edited, edit_notes)` → typed `EditClassification` with category (one of six), confidence, rationale, model attribution
 
 ### Core (composing — depends on one leaf module)
 - Cost Accountant → LLM Client: cost tracking and budget enforcement — wraps LLM Client with pre-call estimation, per-call/operation/session budget checking, append-only JSONL ledger, rate-limit and spending-cap abort
 - Gateway → Telegram Client (optional, runtime import): multi-platform message bus with Telegram/log/fake adapters, inbound + outbound messaging, feedback signal dispatch
+- Edit Classifier → Structured LLM: LLM-as-judge categorical classifier for review-gate edit logs — `(original, edited, edit_notes)` → typed `EditClassification` with category (one of six), confidence, rationale, model attribution. Uses `structured_call` for schema-enforced output; LLM client itself is injected through `structured_call`'s first argument.
 
 ### Flexible
 - [deferred] Discord client (when a second project needs it)
@@ -65,7 +65,7 @@ The author's own projects. Currently: Phosphene (autonomous personality agent), 
 - Additional platform clients (Discord, Slack) as projects need them
 
 ## Size Estimate
-Multi-module. Thirteen modules (eleven leaf + two composing), each a standalone package under `src/toolkit/<module>/`.
+Multi-module. Thirteen modules (ten leaf + three composing), each a standalone package under `src/toolkit/<module>/`.
 
 ---
 
@@ -75,4 +75,4 @@ Multi-module. Thirteen modules (eleven leaf + two composing), each a standalone 
 | 2026-04-04 | Initial PROJECT.md | Motivated by Phosphene + Year-in-Search overlap |
 | 2026-06-04 | Synced module list to 11 (added gateway, source_ingestion, feedback_collector, prompt_regression, structured_llm); promoted JSON-RPC from Candidate to Core (second consumer materialized via codexbot); documented second cross-dep exception (gateway → telegram_client); generalized cross-dep rule to leaf vs. composing modules; added Diplomat as consumer | Doc drift — PROJECT.md was lagging behind API.md and on-disk state |
 | 2026-06-05 | Added Coaching module (12th, leaf). Extracted from Diplomat; Clanker Courts queued as second consumer. | Second-consumer rule satisfied via Diplomat (current) + Clanker Courts (incoming). |
-| 2026-06-07 | Added Edit Classifier module (13th, leaf). Extracted from Diplomat Phase 33; Clanker Courts queued as second consumer. Categories hardcoded; project-side factory pattern (`build_edit_classifier` stays in each consumer). | Second-consumer rule satisfied via Diplomat (current) + Clanker Courts (incoming). |
+| 2026-06-07 | Added Edit Classifier module (13th; composing → Structured LLM). Extracted from Diplomat Phase 33; Clanker Courts queued as second consumer. Categories hardcoded; project-side factory pattern (`build_edit_classifier` stays in each consumer). Cross-toolkit dep on `structured_llm.structured_call` documented as the third allowed exception to the no-cross-deps rule (alongside cost_accountant→llm_client and gateway→telegram_client). | Second-consumer rule satisfied via Diplomat (current) + Clanker Courts (incoming). |

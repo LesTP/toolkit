@@ -6,10 +6,11 @@
 ## What is toolkit?
 
 A local Python package of reusable modules. Leaf modules have no toolkit
-dependencies; two composing modules wrap exactly one leaf module each
-(`cost_accountant → llm_client`, `gateway → telegram_client`). Heavy SDKs
-are optional extras; numpy / sentence-transformers / hdbscan are required
-only by the modules that use them.
+dependencies; three composing modules wrap exactly one leaf module each
+(`cost_accountant → llm_client`, `gateway → telegram_client`,
+`edit_classifier → structured_llm`). Heavy SDKs are optional extras;
+numpy / sentence-transformers / hdbscan are required only by the modules
+that use them.
 
 Installed as an editable package (`pip install -e .` from the toolkit root).
 
@@ -1114,7 +1115,7 @@ toolkit/
     └── coaching/               # leaf — no core deps (yaml lazy-imported)
     │   ├── __init__.py
     │   └── core.py             # CoachingEvent, Command, RouteRule, TaggedCoachingParser, load_routes_config
-    └── edit_classifier/        # leaf — depends only on toolkit.structured_llm
+    └── edit_classifier/        # composing — depends on toolkit.structured_llm
         ├── __init__.py
         ├── types.py            # EditClassification
         └── classifier.py       # LLMEditClassifier, EDIT_CLASSIFICATION_CATEGORIES, EDIT_CLASSIFICATION_SCHEMA
