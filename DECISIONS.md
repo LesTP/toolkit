@@ -38,3 +38,31 @@ Priority: Important
 Decision: Extract structured LLM helpers as a leaf module that accepts an injected client with `complete(messages, config, tier)` rather than importing `toolkit.llm_client`.
 Rationale: The duplicated diplomat pattern is reusable across consumers, but the toolkit module should remain independent and usable with fakes or consumer-owned LLM wrappers. This matches the prompt_regression injection pattern and preserves the no-cross-dependency rule.
 Revisit if: Multiple modules need a shared formal protocol type and the project approves a shared type package or an explicit dependency.
+
+D-4: edit_classifier categories are hardcoded
+Date: 2026-06-07 | Status: Closed
+Priority: Important
+Decision: The six edit-classification categories (`tone_softer`, `tone_harder`, `commitment_removed`, `ambiguity_added`, `constraint_enforcement`, `persona_correction`) are hardcoded as a module-level `EDIT_CLASSIFICATION_CATEGORIES` tuple and embedded in `EDIT_CLASSIFICATION_SCHEMA`.
+Rationale: Both Diplomat and Clanker Courts use the same six categories (five translate verbatim; `constraint_enforcement` covers game-rule violations in both domains). Parameterizing the category list now would be premature generalization for two consumers with identical needs.
+Revisit if: A third consumer needs a different category list, OR Diplomat / Clanker Courts diverge on category vocabulary mid-flight. At that point parameterize via a constructor kwarg with the current tuple as the default.
+
+D-5: edit_classifier factory lives project-side, not in toolkit
+Date: 2026-06-07 | Status: Closed
+Priority: Important
+Decision: Toolkit exports only the `LLMEditClassifier` primitive plus `EditClassification`, `EDIT_CLASSIFICATION_SCHEMA`, and `EDIT_CLASSIFICATION_CATEGORIES`. Each consumer writes its own `build_edit_classifier(...)` factory that reads its own config-file shape and constructs the primitive.
+Rationale: Diplomat's `build_edit_classifier` reads a `pipeline.yaml`-shaped `{"primary": {...}, "secondary": {...}}` dict. Clanker Courts will have a different config layout. Baking diplomat's `"primary"` key assumption into toolkit would couple Clanker Courts' config to a diplomat convention. The project-side factory pattern matches the existing `build_reconciler` precedent (`diplomat/src/modules/reconciliation/__init__.py` wraps `toolkit.structured_llm.structured_call`).
+Revisit if: Consumers' config conventions converge enough that a shared factory becomes obviously reusable. Until then, the ~15-line per-project adapter is the right cost-of-decoupling.
+
+D-6: edit_classifier `load_prompt` stays inlined
+Date: 2026-06-07 | Status: Closed
+Priority: Routine
+Decision: The prompt-loading helper (`Path(p).read_text(encoding="utf-8").strip()`) is inlined in `LLMEditClassifier.__init__` rather than imported from a `toolkit.io` helper module.
+Rationale: One line. No existing `toolkit.io` module. Promoting to a shared helper requires creating the module and convincing 2+ other call sites to consume it; the cost-of-abstraction exceeds the cost-of-duplication at one caller.
+Revisit if: Three or more toolkit modules need the same `read_text + strip` helper, at which point introduce `toolkit.io.load_prompt`.
+
+D-7: edit_classifier constructor requires explicit `prompt_path` (no default)
+Date: 2026-06-07 | Status: Closed
+Priority: Routine
+Decision: `LLMEditClassifier.__init__` takes `prompt_path: str | Path` as a required parameter. Diplomat's original `DEFAULT_PROMPT_PATH = Path("config/prompts/edit_classifier.txt")` constant was dropped in extraction.
+Rationale: Toolkit cannot know the consumer's filesystem layout. A diplomat-relative default is meaningless from Clanker Courts (or from a test process with a different CWD). Each consumer's `build_*` factory passes its own path.
+Revisit if: Toolkit grows a notion of consumer-relative paths (e.g. a `TOOLKIT_PROMPT_DIR` env var convention). Not on the roadmap.

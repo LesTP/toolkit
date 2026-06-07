@@ -884,6 +884,74 @@ Notes:
 
 ---
 
+### `toolkit.edit_classifier`
+
+LLM-as-judge categorical classifier for review-gate edit logs. Takes `(original_draft, edited_draft, edit_notes)` and returns a typed `EditClassification` with category (one of six fixed values), confidence in `[0, 1]`, one-line rationale, the classifier model name, and a tz-aware `classified_at`. Intended for a coached-review feedback loop: operator edits a draft → classifier categorises → consumer surfaces recurring patterns → underlying prompt gets tightened.
+
+The classifier is config-agnostic. Each consumer writes its own `build_*` factory that translates its own config-file shape into the constructor kwargs.
+
+#### Quick start
+
+```python
+from pathlib import Path
+
+from toolkit.edit_classifier import LLMEditClassifier, EditClassification
+
+
+classifier = LLMEditClassifier(
+    llm_client=my_llm_client,                  # any object with .complete(**kwargs)
+    llm_config={
+        "provider": "openai",
+        "models": {"commodity": "gpt-4.1-mini"},
+        "api_key": "...",
+    },
+    tier="commodity",
+    prompt_path=Path("config/prompts/edit_classifier.txt"),
+    attribution="alpha",                        # optional, threaded into cost ledger
+)
+
+result: EditClassification = await classifier.classify(
+    original="We will crush your proposal.",
+    edited="We can push back on your proposal.",
+    edit_notes="Soften tone.",
+)
+# result.category    -> "tone_softer"
+# result.confidence  -> 0.9 (validated in [0,1])
+# result.rationale   -> "The edit removes confrontational phrasing." (model-generated)
+# result.classifier_model -> "gpt-4.1-mini"
+# result.classified_at    -> datetime.now(timezone.utc)
+```
+
+#### Categories
+
+The six categories are hardcoded for the v1 surface. Both Diplomat and Clanker Courts use the same set:
+
+| Category | Meaning |
+|---|---|
+| `tone_softer` | Original was more confrontational than the edit |
+| `tone_harder` | Original was softer than the edit |
+| `commitment_removed` | Edit removes a concrete promise or agreement |
+| `ambiguity_added` | Edit introduces hedging not in the original |
+| `constraint_enforcement` | Edit removes content that violated a rule or constraint |
+| `persona_correction` | Edit brings the response back in character |
+
+#### Public API
+
+| Symbol | Kind | Description |
+|--------|------|-------------|
+| `LLMEditClassifier` | class | `__init__(llm_client, llm_config, tier, prompt_path, attribution=None)`, `async classify(original, edited, edit_notes)` |
+| `EditClassification` | dataclass | `category`, `confidence`, `rationale`, `classifier_model`, `classified_at` (tz-aware UTC) |
+| `EDIT_CLASSIFICATION_CATEGORIES` | tuple | The six category strings |
+| `EDIT_CLASSIFICATION_SCHEMA` | dict | JSON schema enforced by `structured_call` |
+
+Notes:
+
+- The prompt file is read at construction time; pass a path your project owns.
+- Blank `original` or `edited` raise `ValueError`. Out-of-enum category, out-of-range confidence, or blank rationale raise `ValueError` as a defensive second check after the schema-validated structured call.
+- Each consumer typically wraps the constructor in a project-side `build_edit_classifier(...)` factory that knows its own config shape (e.g. Diplomat's `pipeline.yaml` `{"primary": {...}}` convention). Mirror the `build_reconciler` pattern in Diplomat's `modules/reconciliation` for the wrapper shape.
+
+---
+
 ## Project structure
 
 ```
@@ -950,9 +1018,13 @@ toolkit/
         ├── __init__.py            Public re-exports
         ├── types.py               FeedbackEvent, OutputRecord, _NoteInput, _NotePatch
         └── collector.py           FeedbackCollector (register, classify, silence)
-    └── coaching/
+    ├── coaching/
+    │   ├── __init__.py            Public re-exports
+    │   └── core.py                CoachingEvent, Command, RouteRule, TaggedCoachingParser, load_routes_config (yaml lazy-imported)
+    └── edit_classifier/
         ├── __init__.py            Public re-exports
-        └── core.py                CoachingEvent, Command, RouteRule, TaggedCoachingParser, load_routes_config (yaml lazy-imported)
+        ├── types.py               EditClassification
+        └── classifier.py          LLMEditClassifier, EDIT_CLASSIFICATION_CATEGORIES, EDIT_CLASSIFICATION_SCHEMA
 ```
 
 ## Consumers

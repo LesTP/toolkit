@@ -713,3 +713,78 @@ commands:
 - Unknown slash commands return `CoachingEvent` (default route), not `Command` — so unknown commands aren't silently dropped.
 - `/edit` is special-cased: the rest of the line is captured as `args["text"]`. All other commands return `args={}`.
 - `load_routes_config()` requires `pyyaml`. Consumers that don't want a YAML dep can build their own config dict and call `TaggedCoachingParser.from_config(dict)`.
+
+---
+
+## toolkit.edit_classifier
+**Consumers:** Diplomat (Phase 33); Clanker Courts (incoming)
+
+### Types
+
+```python
+@dataclass(frozen=True)
+class EditClassification:
+    category: str            # one of EDIT_CLASSIFICATION_CATEGORIES
+    confidence: float        # in [0, 1]
+    rationale: str           # one-line explanation, non-blank
+    classifier_model: str    # resolved from llm_config["models"][tier]
+    classified_at: datetime  # tz-aware UTC (naive datetimes are upgraded in __post_init__)
+```
+
+### Class
+
+```python
+class LLMEditClassifier:
+    def __init__(
+        self,
+        llm_client: Any,
+        llm_config: Any,
+        tier: Any,
+        prompt_path: str | Path,
+        attribution: str | None = None,
+    ) -> None
+        # Reads prompt_path at construction. classifier_model resolved from
+        # llm_config["models"][tier] for the EditClassification audit field.
+
+    async def classify(
+        self,
+        original: str,
+        edited: str,
+        edit_notes: str | None,
+    ) -> EditClassification
+        # Validates non-blank original/edited.
+        # Calls toolkit.structured_llm.structured_call with the fixed
+        # EDIT_CLASSIFICATION_SCHEMA, purpose="edit_classification",
+        # attribution=self.attribution, max_retries=1.
+        # Defensively rechecks category, confidence, rationale after the
+        # schema-validated structured call.
+```
+
+### Module-level constants
+
+```python
+EDIT_CLASSIFICATION_CATEGORIES: tuple[str, ...] = (
+    "tone_softer",            # original more confrontational than edit
+    "tone_harder",            # original softer than edit
+    "commitment_removed",     # edit removes a concrete promise
+    "ambiguity_added",        # edit introduces hedging not in original
+    "constraint_enforcement", # edit removes rule-violating content
+    "persona_correction",     # edit brings response back in character
+)
+
+EDIT_CLASSIFICATION_SCHEMA: dict[str, Any]  # JSON schema for structured_call
+```
+
+### Errors
+- `ValueError("original must not be blank")` / `"edited must not be blank"` — blank inputs.
+- `ValueError("Invalid edit classification category: ...")` — out-of-enum result (defensive; schema should catch this first).
+- `ValueError("Edit classification confidence must be between 0 and 1")` — out-of-range confidence (defensive).
+- `ValueError("Edit classification rationale must not be blank")` — blank rationale (defensive).
+- `RuntimeError` — `structured_call` failure after retries.
+- `FileNotFoundError` — `prompt_path` doesn't exist at construction.
+
+### Notes
+- The six categories are hardcoded for v1. Parameterise only when a third consumer needs a different list.
+- Consumers wrap the constructor in a project-side `build_edit_classifier(...)` factory that translates the project's own config-file shape (e.g. Diplomat's `pipeline.yaml` `{"primary": {...}}` convention) into the kwargs above. Mirror Diplomat's `build_reconciler` pattern.
+- The prompt file is read once at construction. Diplomat's bundled prompt is a reasonable starting point; consumers can tweak per-domain wording while keeping the six-category structure.
+- The LLM client can be anything exposing `await complete(**kwargs)` — `toolkit.llm_client` is the obvious choice but not required.

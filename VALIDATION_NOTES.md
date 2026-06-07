@@ -241,6 +241,17 @@ TGBot currently has internal modules that overlap with toolkit. When Phosphene i
 **Risk:** Low-medium. The provider abstraction is solid. Adding rotation and budget tracking is new code, not a refactor of existing code.
 
 ### No migration needed for:
-- **Discovery** — GitHub API client, quality filters. Phosphene doesn't search GitHub.
-- **Storage** — SQLite/MySQL CRUD. Phosphene uses Obsidian-compatible markdown files, not a relational DB.
-- **Orchestrator** — TGBot-specific pipeline wiring.
+- **Discovery** - GitHub API client, quality filters. Phosphene doesn't search GitHub.
+- **Storage** - SQLite/MySQL CRUD. Phosphene uses Obsidian-compatible markdown files, not a relational DB.
+- **Orchestrator** - TGBot-specific pipeline wiring.
+
+## Toolkit ↔ Diplomat (extracted modules)
+
+Diplomat is the source-of-extraction project for two toolkit modules; Clanker Courts is queued as the second consumer for both.
+
+| Module | Extracted | Diplomat status | Clanker Courts status |
+|--------|-----------|-----------------|------------------------|
+| `coaching` | 2026-06-05 | Consumes from `toolkit.coaching` unchanged | Incoming (PROJECT.md lists Coaching `COMMIT:` tag) |
+| `edit_classifier` | 2026-06-07 (Phase 33 follow-up) | Consumes from `toolkit.edit_classifier`; project-side `build_edit_classifier(...)` factory + prompt file stay in diplomat | Incoming (PROJECT.md describes operator coaching surface mirroring Diplomat's `coached_game.py` pattern) |
+
+**Pattern.** Toolkit holds only the config-agnostic primitive (parser / classifier class + types + schema + constants). Each consumer keeps a thin project-side `build_*` factory that reads its own config-file shape and constructs the primitive. Categories / tag vocabularies are hardcoded for v1; parameterise only when a third consumer needs a different list.

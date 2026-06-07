@@ -26,6 +26,7 @@ Leaf modules (no toolkit dependencies):
 - Structured LLM — LLM JSON extraction with schema validation and retry (ARCH_structured_llm.md)
 - Prompt Regression — scenario-based prompt regression framework with LLM-as-judge (ARCH_prompt_regression.md)
 - Coaching — tag-based operator-input parser, YAML-driven routes + slash-command vocabulary (ARCH_coaching.md)
+- Edit Classifier — LLM-as-judge categorical classifier for review-gate edit logs (ARCH_edit_classifier.md)
 
 Composing modules (depend on exactly one leaf module):
 - Cost Accountant → LLM Client — cost tracking and budget enforcement (ARCH_cost_accountant.md)

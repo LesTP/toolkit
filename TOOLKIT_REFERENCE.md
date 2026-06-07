@@ -33,6 +33,7 @@ Location: `p:\shared\toolkit\`
 | `toolkit.source_ingestion` | `from toolkit.source_ingestion import ...` | Content adapter framework — RSS, Telegram channel, Reddit, human-share DM, corpus importers (LiveJournal, Blogspot, plain text, Facebook) |
 | `toolkit.feedback_collector` | `from toolkit.feedback_collector import ...` | Normalises platform feedback (reactions/replies/silence) into structured events written to a memory store |
 | `toolkit.coaching` | `from toolkit.coaching import ...` | Tag-based operator-input parser — `TAG: content` notes routed to consumers, `/command args` parsed to typed `Command`s, YAML-driven config |
+| `toolkit.edit_classifier` | `from toolkit.edit_classifier import ...` | LLM-as-judge categorical classifier for review-gate edit logs — `(original, edited, edit_notes)` → typed `EditClassification` with category (one of six), confidence, rationale, model attribution |
 
 ---
 
@@ -952,6 +953,98 @@ match result:
 
 ---
 
+## toolkit.edit_classifier
+
+LLM-as-judge categorical classifier for review-gate edit logs. Takes
+`(original_draft, edited_draft, edit_notes)` and returns a typed
+`EditClassification` with category (one of six fixed values), confidence
+in `[0, 1]`, one-line rationale, the classifier model name, and a
+tz-aware `classified_at`. Intended for a coached-review feedback loop:
+operator edits a draft, the classifier categorises the edit, the
+consumer surfaces recurring patterns so the underlying prompt can be
+tightened.
+
+The classifier is config-agnostic. Each consumer writes its own
+project-side `build_*` factory that translates its own config-file shape
+into the constructor kwargs.
+
+### Key exports
+
+```python
+from toolkit.edit_classifier import (
+    # Result type
+    EditClassification,              # frozen dataclass: category, confidence, rationale, classifier_model, classified_at (tz-aware UTC)
+    # Classifier
+    LLMEditClassifier,               # __init__(llm_client, llm_config, tier, prompt_path, attribution=None), async classify(original, edited, edit_notes)
+    # Constants
+    EDIT_CLASSIFICATION_CATEGORIES,  # tuple of the six category strings
+    EDIT_CLASSIFICATION_SCHEMA,      # JSON schema enforced by structured_call
+)
+```
+
+### Categories
+
+| Category | Meaning |
+|---|---|
+| `tone_softer` | Original was more confrontational than the edit |
+| `tone_harder` | Original was softer than the edit |
+| `commitment_removed` | Edit removes a concrete promise or agreement |
+| `ambiguity_added` | Edit introduces hedging not in the original |
+| `constraint_enforcement` | Edit removes content that violated a rule or constraint |
+| `persona_correction` | Edit brings the response back in character |
+
+The six are hardcoded for v1; parameterise only when a third consumer
+needs a different list.
+
+### Usage pattern
+
+```python
+from pathlib import Path
+
+from toolkit.edit_classifier import LLMEditClassifier, EditClassification
+
+
+# Consumer wires its own llm_client + config translation.
+classifier = LLMEditClassifier(
+    llm_client=my_llm_client,                  # any object with .complete(**kwargs)
+    llm_config={
+        "provider": "openai",
+        "models": {"commodity": "gpt-4.1-mini"},
+        "api_key": "...",
+    },
+    tier="commodity",
+    prompt_path=Path("config/prompts/edit_classifier.txt"),
+    attribution="alpha",                       # optional, threaded into cost ledger
+)
+
+result: EditClassification = await classifier.classify(
+    original="We will crush your proposal.",
+    edited="We can push back on your proposal.",
+    edit_notes="Soften tone.",
+)
+# result.category    -> "tone_softer"
+# result.confidence  -> 0.9 (validated in [0,1])
+# result.rationale   -> "The edit removes confrontational phrasing."
+# result.classifier_model -> "gpt-4.1-mini"
+# result.classified_at    -> datetime.now(timezone.utc)
+```
+
+### Notes
+
+- The prompt file is read at construction; pass a path your project owns.
+- Blank `original` or `edited` raise `ValueError`. Out-of-enum category,
+  out-of-range confidence, or blank rationale also raise `ValueError` as
+  a defensive second check after the schema-validated structured call.
+- Each consumer typically wraps the constructor in a project-side
+  `build_edit_classifier(...)` factory that knows its own config shape
+  (e.g. Diplomat's `pipeline.yaml` `{"primary": {...}}` convention).
+  Mirror the `build_reconciler` pattern in Diplomat's
+  `modules/reconciliation` for the wrapper shape.
+- The LLM client can be anything exposing `await complete(**kwargs)` —
+  `toolkit.llm_client` is the obvious choice but not required.
+
+---
+
 ## Project structure
 
 ```
@@ -1019,15 +1112,19 @@ toolkit/
         ├── types.py            # FeedbackEvent, OutputRecord, _NoteInput, _NotePatch
         └── collector.py        # FeedbackCollector (register, classify, silence)
     └── coaching/               # leaf — no core deps (yaml lazy-imported)
+    │   ├── __init__.py
+    │   └── core.py             # CoachingEvent, Command, RouteRule, TaggedCoachingParser, load_routes_config
+    └── edit_classifier/        # leaf — depends only on toolkit.structured_llm
         ├── __init__.py
-        └── core.py             # CoachingEvent, Command, RouteRule, TaggedCoachingParser, load_routes_config
+        ├── types.py            # EditClassification
+        └── classifier.py       # LLMEditClassifier, EDIT_CLASSIFICATION_CATEGORIES, EDIT_CLASSIFICATION_SCHEMA
 ```
 
 ## Current consumers
 
 | Project | Modules used |
 |---------|-------------|
-| **Diplomat** | `llm_client`, `cost_accountant`, `structured_llm`, `prompt_regression`, `telegram_client`, `coaching` |
+| **Diplomat** | `llm_client`, `cost_accountant`, `structured_llm`, `prompt_regression`, `telegram_client`, `coaching`, `edit_classifier` |
 | **Phosphene** | `embedding`, `clustering`, `llm_client`, `cost_accountant`, `gateway`, `source_ingestion`, `feedback_collector` |
 | **Year-in-Search** | `embedding`, `clustering`, `llm_client` |
 | **codexbot** | `telegram_client` (polling, messaging), `json_rpc` (Codex subprocess comms) |
