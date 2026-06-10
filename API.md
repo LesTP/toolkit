@@ -5,7 +5,7 @@ in consumer projects where toolkit is not importable.
 
 **Consumers:** Diplomat, Phosphene, Codexbot, Year-in-Search, TGBot
 
-Last synced: 2026-06-05
+Last synced: 2026-06-10
 
 ---
 
@@ -237,6 +237,48 @@ async request(method: str, params: dict | list | None = None,
 async notify(method: str, params: dict | list | None = None) -> None
 async start() -> None
 async stop() -> None
+```
+
+---
+
+## toolkit.clankmates_client
+**Consumers:** Diplomat, Clanker Courts
+
+### Types
+
+```python
+class ClankmatesClient:
+    def __init__(self, *, clankm_path: str = "clankm",
+                 runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+                 timeout: float = 30) -> None
+
+class ClankmatesError(RuntimeError):
+    command: list[str]
+    returncode: int | None
+    stdout: str
+    stderr: str
+    decode_error: str | None
+    timeout: float | None
+
+Runner = Callable[..., subprocess.CompletedProcess[str]]
+```
+
+### Methods (ClankmatesClient)
+
+```python
+whoami(profile: str) -> dict[str, Any]
+list_threads(profile: str, status: str = "all") -> dict[str, Any]
+show_thread(profile: str, thread_id: str, *, limit: int = 10,
+            cursor: str | None = None) -> dict[str, Any]
+archive_thread(profile: str, thread_id: str) -> dict[str, Any]
+send(profile: str, recipient: str, body: dict[str, Any]) -> dict[str, Any]
+reply(profile: str, thread_id: str, body: dict[str, Any]) -> dict[str, Any]
+```
+
+### Methods (ClankmatesError)
+
+```python
+to_dict() -> dict[str, Any]
 ```
 
 ---

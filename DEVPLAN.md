@@ -1,7 +1,7 @@
 ---
 phase: 4
 blocked: false
-state: plan
+state: execute
 steps_remaining: 0
 ---
 
@@ -55,7 +55,7 @@ Vendor `clankmates.py` from `p:\shared\clanker-courts-player-client\skills\clank
 
 Steps:
 
-- [ ] 4.1 — **Module skeleton + vendored player-side wrapper.** Create `toolkit/src/toolkit/clankmates_client/__init__.py` and `subprocess.py`. Vendor `clankmates.py` verbatim from the player-client repo (preserve `ClankmatesError` shape and `_run_json` pattern; add `SOURCE:` attribution + commit hash in module docstring). Vendor methods: `whoami`, `list_threads`, `show_thread`, `archive_thread`, `send`, `reply`. Write `ARCH_clankmates_client.md` skeleton covering the contract. Port upstream's `tests/test_clankmates.py` to `tests/clankmates_client/test_subprocess.py` with a fake `runner`. Run toolkit regression.
+- [x] 4.1 — **Module skeleton + vendored player-side wrapper.** Create `toolkit/src/toolkit/clankmates_client/__init__.py` and `subprocess.py`. Vendor `clankmates.py` verbatim from the player-client repo (preserve `ClankmatesError` shape and `_run_json` pattern; add `SOURCE:` attribution + commit hash in module docstring). Vendor methods: `whoami`, `list_threads`, `show_thread`, `archive_thread`, `send`, `reply`. Write `ARCH_clankmates_client.md` skeleton covering the contract. Port upstream's `tests/test_clankmates.py` to `tests/clankmates_client/test_subprocess.py` with a fake `runner`. Run toolkit regression.
 
 - [ ] 4.3 — **`decode` submodule.** Create `toolkit/src/toolkit/clankmates_client/decode.py`. Port game-agnostic helpers from `clanker_courts_player/messages.py`: `decode_clankmates_message`, `message_timestamp`, `filter_by_body_type`, `latest_by_timestamp`. Vendor fixtures from player-client `tests/fixtures/*.json` for tests at `tests/clankmates_client/test_decode.py`. Game-specific helpers (`latest_unseen_phase_report`, `recent_peer_diplomacy`) stay in consumers. Run toolkit regression.
 

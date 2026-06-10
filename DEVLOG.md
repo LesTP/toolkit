@@ -113,3 +113,14 @@ read-only). To run structured_llm tests: install to a temp dir and add to PYTHON
 Activated Phase 4: `clankmates_client`. Steps 4.1, 4.3, 4.4, 4.5 queued (player-side wrapper, decode, cursor, screen). Host-side ops (4.2) deferred pending arena Phase A. Governance (4.6) deferred pending 4.2 + arena Phase C contract.
 
 ARCHITECTURE.md updated (Component Map + Implementation Sequence row 14). DECISIONS.md D-8 records scope rationale (vendor now; host-side deferred).
+
+## 2026-06-10 — Clankmates Client Step 4.1
+
+### Step 4.1: Module skeleton + vendored player-side wrapper
+Mode: Build
+Outcome: Passed 6/6 targeted tests for `tests/clankmates_client/test_subprocess.py`.
+Contract changes: Added `src/toolkit/clankmates_client/__init__.py`, `src/toolkit/clankmates_client/subprocess.py`, `ARCH_clankmates_client.md`, and the new `toolkit.clankmates_client` section in `API.md`.
+
+Vendored the upstream synchronous `clankm` wrapper into `toolkit.clankmates_client.subprocess` with the preserved `ClankmatesError` payload and `_run_json` error handling path. Added the source attribution and upstream commit hash to the module docstring, and ported the upstream test pattern to a fake-runner regression suite under `tests/clankmates_client/`.
+
+The new package is deliberately small: it exposes only the client and error types for now, keeping later decode/cursor/screen work in the queued phase-4 steps.
