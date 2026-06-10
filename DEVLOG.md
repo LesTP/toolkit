@@ -133,3 +133,12 @@ Outcome: Passed 13/13 `tests/clankmates_client` tests after adding the decode he
 Contract changes: Added `src/toolkit/clankmates_client/decode.py`, `tests/clankmates_client/test_decode.py`, vendored decode fixtures under `tests/clankmates_client/fixtures/`, and updated `ARCH_clankmates_client.md` plus `API.md`.
 
 Split the generic Clankmates message helpers out of the upstream player-client `messages.py` pattern into a leaf `decode` module: `decode_clankmates_message`, `message_timestamp`, `filter_by_body_type`, and `latest_by_timestamp`. Kept the game-specific selectors out of the toolkit as planned, and used vendored inbox fixtures to cover both timestamp ordering and body-type filtering.
+
+## 2026-06-10 — Clankmates Client Step 4.4
+
+### Step 4.4: `cursor` submodule
+Mode: Build
+Outcome: 18/18 tests passing in `tests/clankmates_client/test_cursor.py`. Full non-heavy-dep regression (clankmates, json_rpc, cost_accountant, telegram core) remains green.
+Contract changes: Added `src/toolkit/clankmates_client/cursor.py`, `tests/clankmates_client/test_cursor.py`, updated `__init__.py` exports.
+
+Extracted `ThreadCursorStore` and `filter_unseen` from the atomic-write pattern in the upstream `state_store.py`. `ThreadCursorStore` maps `{thread_id: {cursor, last_message_id}}` in a JSON file, using temp-file + `os.replace` for crash safety and automatic parent-dir creation. `CursorState` is a frozen dataclass. `filter_unseen` operates on decoded messages (from `decode_clankmates_message`) keyed by `message_id`. Tests cover round-trip, restart-replay scenario (new store from same path sees prior state), atomic write (no .tmp left), nested path creation, and `filter_unseen` idempotency + order preservation.

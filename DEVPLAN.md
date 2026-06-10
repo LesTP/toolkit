@@ -33,7 +33,7 @@ Consumers: Diplomat (arena host + player), Clanker Courts (game_transport adapte
 | Cost Accountant | Complete (Phase 1, 28 tests) |
 | Prompt Regression | Complete (Phase 2, 26 tests) |
 | Structured LLM | Complete (Phase 3) |
-| Clankmates Client | Active (Phase 4 — steps 4.1, 4.3, 4.4, 4.5 queued) |
+| Clankmates Client | Active (Phase 4 — steps 4.1, 4.3, 4.4 done; 4.5 queued) |
 
 ## Phase 4: Clankmates Client — Vendor + Extend from clanker-courts-player-client
 
@@ -59,7 +59,7 @@ Steps:
 
 - [x] 4.3 — **`decode` submodule.** Create `toolkit/src/toolkit/clankmates_client/decode.py`. Port game-agnostic helpers from `clanker_courts_player/messages.py`: `decode_clankmates_message`, `message_timestamp`, `filter_by_body_type`, `latest_by_timestamp`. Vendor fixtures from player-client `tests/fixtures/*.json` for tests at `tests/clankmates_client/test_decode.py`. Game-specific helpers (`latest_unseen_phase_report`, `recent_peer_diplomacy`) stay in consumers. Run toolkit regression.
 
-- [ ] 4.4 — **`cursor` submodule.** Create `toolkit/src/toolkit/clankmates_client/cursor.py`. Extract `ThreadCursorStore` (JSON-backed `{thread_id: (last_cursor, last_processed_message_id)}` persistence) and `filter_unseen(messages, processed_ids)` helper from patterns in `clanker_courts_player/state_store.py`. Tests at `tests/clankmates_client/test_cursor.py` cover tempdir round-trip, restart-replay scenario (kill, restart, verify no replay), unseen-filter idempotency. Run toolkit regression.
+- [x] 4.4 — **`cursor` submodule.** Create `toolkit/src/toolkit/clankmates_client/cursor.py`. Extract `ThreadCursorStore` (JSON-backed `{thread_id: (last_cursor, last_processed_message_id)}` persistence) and `filter_unseen(messages, processed_ids)` helper from patterns in `clanker_courts_player/state_store.py`. Tests at `tests/clankmates_client/test_cursor.py` cover tempdir round-trip, restart-replay scenario (kill, restart, verify no replay), unseen-filter idempotency. Run toolkit regression.
 
 - [ ] 4.5 — **`screen` submodule.** Create `toolkit/src/toolkit/clankmates_client/screen.py`. Extract peer-DM screening rules from `clanker-courts-operator/SKILL.md:140-164`: body-type match, recipient match, sender-address-vs-claimed-from spoofing check, known-active-sender membership, expected extra body fields. Returns `ScreeningResult(accepted, reasons)`. Tests at `tests/clankmates_client/test_screen.py` cover happy path + each failure mode + an explicit spoofing case. Run toolkit regression.
 
