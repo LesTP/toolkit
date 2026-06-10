@@ -1,6 +1,6 @@
 ---
 phase: 3
-blocked: false
+blocked: true
 state: close
 steps_remaining: 0
 ---
@@ -8,20 +8,19 @@ steps_remaining: 0
 # Toolkit — Dev Plan
 
 ## Cold Start
-Active module: **Structured LLM** (extraction from diplomat project).
-Load: ARCH_structured_llm.md for contract, PROJECT.md for constraints, ARCHITECTURE.md for context.
-Consumers: Diplomat (first consumer, 4 modules share this pattern), Phosphene (future).
+Active module: **Clankmates Client** (Phase 4 — vendor + extend from clanker-courts-player-client).
+Load: CLANKMATES_CLIENT_PLAN.md for plan, ARCHITECTURE.md for context, PROJECT.md for constraints.
+Consumers: Diplomat (arena host + player), Clanker Courts (game_transport adapter).
 
 ### Gotchas
 - **Running tests:** Use `/home/claude/toolkit-venv/bin/python3 -m pytest` (not bare `pytest` or `python3 -m pytest` — those hit system Python which has no pytest). The venv is inside the container at `/home/claude/toolkit-venv/`.
 - **PYTHONPATH:** When running tests, set `PYTHONPATH=/home/claude/workspace/toolkit/src` so pytest can find the `toolkit` package, or use `cd /home/claude/workspace/toolkit && /home/claude/toolkit-venv/bin/python3 -m pytest`.
+- **jsonschema missing from venv:** The toolkit venv is read-only. To test `structured_llm`: `pip install --target=/tmp/toolkit-deps jsonschema` then `PYTHONPATH=/home/claude/workspace/toolkit/src:/tmp/toolkit-deps pytest tests/structured_llm/`.
 
 ### Key Context
-- **Extraction source:** `diplomat/tests/prompt_regression/` is the source implementation.
-- **Dependencies:** stdlib only for types and runner; judge accepts an injected LLM client with `complete(messages, config, tier)`.
-- **Consumer dispatch:** Toolkit runner must use a pluggable `module_caller` callback; diplomat keeps domain-specific module wiring.
-- **Scenario contract:** JSON scenario files define module input plus property checks; toolkit owns loading, JSON path helpers, judging, and reporting.
-- **Migration target:** Diplomat becomes the first consumer; Phosphene is the future second consumer.
+- **Vendor source:** `p:\shared\clanker-courts-player-client\skills\clanker-courts-operator\scripts\clanker_courts_player\`
+- **Submodules:** `subprocess.py` (vendored wrapper), `decode.py` (message decoders), `cursor.py` (thread cursor store), `screen.py` (peer-DM screening rules)
+- **Record vendor commit hash** in `subprocess.py` module docstring for upstream diff tracking.
 
 ## Current Status
 | Module | Status |
@@ -66,10 +65,10 @@ Steps:
 
 ## Phase 3: Structured LLM — Extract from Diplomat
 
-**Status:** Complete
+**Status:** Complete. 22 tests passing. See DEVLOG 2026-06-10.
 **Regime:** Build
 
-Extracted structured LLM utilities (structured_complete, parse_json_response, validate_json_schema, load_prompt, load_schema) into `toolkit/structured_llm/`. Updated diplomat extraction, analyst, and adversarial modules to import from toolkit. Generated `deps/toolkit_api.md` vendored contract file in diplomat. All tests pass (toolkit + diplomat 212).
+Extracted structured LLM utilities (structured_complete, parse_json_response, validate_json_schema, load_prompt, load_schema) into `toolkit/structured_llm/`. Updated 6 diplomat call sites to import from toolkit. API.md supersedes per-consumer vendored deps (step 3.4). All tests pass (22 toolkit structured_llm).
 
 **The duplicated pattern (4 copies in diplomat):**
 - `_complete()` — call `llm_client.complete(messages, config, tier)`, await if needed, verify str response. Identical in analyst, adversarial, generation; extraction has a slight variant.
