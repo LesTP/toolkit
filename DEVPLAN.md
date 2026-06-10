@@ -1,7 +1,7 @@
 ---
-phase: 3
-blocked: true
-state: close
+phase: 4
+blocked: false
+state: plan
 steps_remaining: 0
 ---
 
@@ -33,13 +33,13 @@ Consumers: Diplomat (arena host + player), Clanker Courts (game_transport adapte
 | Cost Accountant | Complete (Phase 1, 28 tests) |
 | Prompt Regression | Complete (Phase 2, 26 tests) |
 | Structured LLM | Complete (Phase 3) |
-| Clankmates Client | Queued (Phase 4 — see CLANKMATES_CLIENT_PLAN.md) |
+| Clankmates Client | Active (Phase 4 — steps 4.1, 4.3, 4.4, 4.5 queued) |
 
 ## Phase 4: Clankmates Client — Vendor + Extend from clanker-courts-player-client
 
-**Status:** Queued (not yet active)
+**Status:** Active
 **Regime:** Build
-**Plan:** `p:\shared\toolkit\CLANKMATES_CLIENT_PLAN.md` (six phases total; this DEVPLAN queues sub-steps 4.1, 4.3, 4.4, 4.5 — the four that don't depend on external work).
+**Plan:** `CLANKMATES_CLIENT_PLAN.md` (six phases total; this DEVPLAN queues sub-steps 4.1, 4.3, 4.4, 4.5 — the four that don't depend on external work).
 
 Vendor `clankmates.py` from `p:\shared\clanker-courts-player-client\skills\clanker-courts-operator\scripts\clanker_courts_player\` as `toolkit/clankmates_client/subprocess.py`, then port `messages.py` decoders, `state_store.py` cursor helpers, and the peer-DM screening rules from the operator SKILL.md as separate submodules.
 

@@ -103,3 +103,13 @@ was untested before review.
 read-only). To run structured_llm tests: install to a temp dir and add to PYTHONPATH:
 `pip install --target=/tmp/toolkit-deps jsonschema` then
 `PYTHONPATH=.../src:/tmp/toolkit-deps pytest tests/structured_llm/`.
+
+---
+
+## 2026-06-10 — Clankmates Client Phase 4 planned
+
+**Module:** Clankmates Client | **Phase:** 4 | **Regime:** Build | **Result:** Plan committed
+
+Activated Phase 4: `clankmates_client`. Steps 4.1, 4.3, 4.4, 4.5 queued (player-side wrapper, decode, cursor, screen). Host-side ops (4.2) deferred pending arena Phase A. Governance (4.6) deferred pending 4.2 + arena Phase C contract.
+
+ARCHITECTURE.md updated (Component Map + Implementation Sequence row 14). DECISIONS.md D-8 records scope rationale (vendor now; host-side deferred).

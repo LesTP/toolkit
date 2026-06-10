@@ -66,3 +66,10 @@ Priority: Routine
 Decision: `LLMEditClassifier.__init__` takes `prompt_path: str | Path` as a required parameter. Diplomat's original `DEFAULT_PROMPT_PATH = Path("config/prompts/edit_classifier.txt")` constant was dropped in extraction.
 Rationale: Toolkit cannot know the consumer's filesystem layout. A diplomat-relative default is meaningless from Clanker Courts (or from a test process with a different CWD). Each consumer's `build_*` factory passes its own path.
 Revisit if: Toolkit grows a notion of consumer-relative paths (e.g. a `TOOLKIT_PROMPT_DIR` env var convention). Not on the roadmap.
+
+D-8: clankmates_client scopes to player-side + generic helpers; host-side ops deferred
+Date: 2026-06-10 | Status: Closed
+Priority: Important
+Decision: Phase 4 (this iteration) implements steps 4.1, 4.3, 4.4, 4.5 only: player-side subprocess wrapper (vendored), message decoders, thread-cursor store, and peer-DM screener. Host-side ops (step 4.2: `post_publish`, `channel_create`, typed-inbox schema management) are deferred until `p:\shared\diplomat\CLANKMATES_NOTES.md` exists (arena Phase A output, which documents the exact CLI surface for host-side commands). Step 4.6 (governance + integration check) defers until 4.2 ships and arena Phase C contract is firm.
+Rationale: Host-side ops require confirming exact `clankm` subcommand flags against a live host session (arena Phase A). Implementing against speculative flags risks a breaking rework when the actual surface is confirmed. Player-side ops are fully validated in the upstream player-client test suite and can be vendored safely now. Both consumers (Diplomat arena, Clanker Courts game_transport) need the player-side + generic helpers immediately.
+Revisit if: Arena Phase A completes and `CLANKMATES_NOTES.md` is written — then queue 4.2 in DEVPLAN.

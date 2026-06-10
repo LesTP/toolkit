@@ -17,6 +17,7 @@
 | Feedback Collector | Normalises platform feedback signals (reactions, replies, silence, forwards) into structured `FeedbackEvent`s written to a memory store. Output tracking, bounded pruning, silence detection. Memory store contract is duck-typed (see ARCH_feedback_collector.md). | (consumer-supplied memory store; structural contract only) | Extracted from Phosphene 2026-06 |
 | Coaching | Tag-based operator-input parser. Reads `TAG: content` notes into typed `CoachingEvent` (routed to a consumer-defined queue with a canonical type) and `/command args` into typed `Command` objects. Tag vocabulary and command list loaded from YAML or pre-parsed dict. PyYAML lazy-imported in the file loader only. | none (leaf) | Extracted from Diplomat 2026-06-05; Clanker Courts queued as second consumer |
 | Edit Classifier | LLM-as-judge categorical classifier for review-gate edit logs. Takes `(original, edited, edit_notes)` and returns a typed `EditClassification` with category (one of six: tone_softer, tone_harder, commitment_removed, ambiguity_added, constraint_enforcement, persona_correction), confidence, rationale, classifier model, tz-aware timestamp. Project-side `build_*` factory pattern. | toolkit/structured_llm (one-way; the LLM client itself is injected through `structured_call`'s first argument) | Extracted from Diplomat 2026-06-07; Clanker Courts queued as second consumer |
+| Clankmates Client | Subprocess wrapper around the `clankm` CLI for Clankmates messaging. Player-side ops: `whoami`, `list_threads`, `show_thread`, `archive_thread`, `send`, `reply`. Message decoders (`decode.py`), thread-cursor persistence (`cursor.py`), peer-DM screening rules (`screen.py`). | none (leaf) | Vendored from clanker-courts-player-client 2026-06-10; consumers: Diplomat (arena), Clanker Courts (game_transport adapter) |
 
 ## Data Flow
 
@@ -54,12 +55,13 @@ Diplomat:        Prompt scenarios → Prompt Regression → diplomat module call
 | 5 | JSON-RPC Client | Leaf. Working in codexbot. Extract if second consumer materializes. | Complete |
 | 6 | Cost Accountant | Wraps LLM Client. Budget enforcement, cost ledger, rate-limit abort. Prerequisite for Phosphene LLM resume. | Complete |
 | 7 | Prompt Regression | Leaf test framework extracted from diplomat so prompt behavior checks can be reused by Diplomat and Phosphene. | Complete |
-| 8 | Structured LLM | Leaf helper module for repeated LLM JSON extraction and schema validation patterns shared across Diplomat and future consumers. | In progress |
+| 8 | Structured LLM | Leaf helper module for repeated LLM JSON extraction and schema validation patterns shared across Diplomat and future consumers. | Complete |
 | 9 | Gateway | Multi-platform message bus extracted from Phosphene. Telegram + log + fake adapters; inbound + outbound; feedback signal dispatch. | Complete — extracted 2026-06 |
 | 10 | Source Ingestion | Adapter framework + RSS/Telegram channel/Reddit/human-share/corpus importers extracted from Phosphene. | Complete — extracted 2026-06 |
 | 11 | Feedback Collector | Platform signal normalisation extracted from Phosphene. Memory store contract is duck-typed (no toolkit-cross-import). | Complete — extracted 2026-06 |
 | 12 | Coaching | Tag-based operator-input parser extracted from Diplomat. YAML config (lazy-imported) or pre-parsed dict. Clanker Courts incoming as second consumer. | Complete — extracted 2026-06-05 |
 | 13 | Edit Classifier | LLM-as-judge categorical classifier extracted from Diplomat. Six-category enum (project-side factory + prompt). Clanker Courts incoming as second consumer. | Complete — extracted 2026-06-07 |
+| 14 | Clankmates Client | Subprocess wrapper + message decoders + cursor store + peer-DM screener. Vendored from clanker-courts-player-client; extended for toolkit reuse. Consumers: Diplomat (arena), Clanker Courts. | In progress |
 
 ## Coupling Notes
 
