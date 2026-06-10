@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from inspect import isawaitable
 from pathlib import Path
 from typing import Any
@@ -145,9 +145,6 @@ async def structured_call(
                     retries=retries_used,
                     error=str(exc),
                 )
-
-    # Should not reach here, but just in case.
-    return StructuredResult(success=False, raw=raw, error="Unexpected state")
 
 
 def _normalize_examples(

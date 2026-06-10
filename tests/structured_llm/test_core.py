@@ -36,6 +36,21 @@ def test_parse_json_response_rejects_non_object():
         parse_json_response("[1, 2, 3]")
 
 
+def test_parse_json_response_strips_json_code_fence():
+    fenced = '```json\n{"status": "ok"}\n```'
+    assert parse_json_response(fenced) == {"status": "ok"}
+
+
+def test_parse_json_response_strips_plain_code_fence():
+    fenced = '```\n{"x": 1}\n```'
+    assert parse_json_response(fenced) == {"x": 1}
+
+
+def test_parse_json_response_rejects_prose_with_embedded_json():
+    with pytest.raises(ValueError, match="not valid JSON"):
+        parse_json_response('Here is the JSON: {"status": "ok"}')
+
+
 def test_validate_json_schema_passes():
     schema = {
         "type": "object",
