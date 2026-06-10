@@ -142,3 +142,12 @@ Outcome: 18/18 tests passing in `tests/clankmates_client/test_cursor.py`. Full n
 Contract changes: Added `src/toolkit/clankmates_client/cursor.py`, `tests/clankmates_client/test_cursor.py`, updated `__init__.py` exports.
 
 Extracted `ThreadCursorStore` and `filter_unseen` from the atomic-write pattern in the upstream `state_store.py`. `ThreadCursorStore` maps `{thread_id: {cursor, last_message_id}}` in a JSON file, using temp-file + `os.replace` for crash safety and automatic parent-dir creation. `CursorState` is a frozen dataclass. `filter_unseen` operates on decoded messages (from `decode_clankmates_message`) keyed by `message_id`. Tests cover round-trip, restart-replay scenario (new store from same path sees prior state), atomic write (no .tmp left), nested path creation, and `filter_unseen` idempotency + order preservation.
+
+## 2026-06-10 — Clankmates Client Step 4.5
+
+### Step 4.5: `screen` submodule
+Mode: Build
+Outcome: 12/12 new tests passing in `tests/clankmates_client/test_screen.py`. Full clankmates regression: 43/43 passed. Stable-module regression (json_rpc, prompt_regression) remains green.
+Contract changes: Added `src/toolkit/clankmates_client/screen.py`, `tests/clankmates_client/test_screen.py`, updated `__init__.py` exports (`ScreeningResult`, `screen_peer_message`).
+
+Implemented `screen_peer_message` applying five sequential checks: body type, recipient (`to_player_id`), spoofing (transport sender vs body's claimed `from_player_id`), known-active-sender membership, and extra body field equality. All failures accumulate into `reasons` tuple; `accepted=True` only when reasons is empty. The message dict is expected to be a decoded message (from `decode_clankmates_message`) with `body` (dict) and `raw` sub-dict carrying a `sender` key for the Clankmates transport-level sender address. The vendor SKILL.md (lines 140-164) was inaccessible (`p:\shared` not mounted), so the implementation is derived from the spec in CLANKMATES_CLIENT_PLAN.md Phase 5 and the existing fixture/message shapes. Tests cover all five failure modes independently, an explicit spoofing case, missing sender field, non-dict body, and multi-failure accumulation.
