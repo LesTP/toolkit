@@ -1,8 +1,8 @@
 ---
 phase: 3
 blocked: false
-state: execute
-steps_remaining: 4
+state: close
+steps_remaining: 0
 ---
 
 # Toolkit — Dev Plan
@@ -34,6 +34,35 @@ Consumers: Diplomat (first consumer, 4 modules share this pattern), Phosphene (f
 | Cost Accountant | Complete (Phase 1, 28 tests) |
 | Prompt Regression | Complete (Phase 2, 26 tests) |
 | Structured LLM | Complete (Phase 3) |
+| Clankmates Client | Queued (Phase 4 — see CLANKMATES_CLIENT_PLAN.md) |
+
+## Phase 4: Clankmates Client — Vendor + Extend from clanker-courts-player-client
+
+**Status:** Queued (not yet active)
+**Regime:** Build
+**Plan:** `p:\shared\toolkit\CLANKMATES_CLIENT_PLAN.md` (six phases total; this DEVPLAN queues sub-steps 4.1, 4.3, 4.4, 4.5 — the four that don't depend on external work).
+
+Vendor `clankmates.py` from `p:\shared\clanker-courts-player-client\skills\clanker-courts-operator\scripts\clanker_courts_player\` as `toolkit/clankmates_client/subprocess.py`, then port `messages.py` decoders, `state_store.py` cursor helpers, and the peer-DM screening rules from the operator SKILL.md as separate submodules.
+
+**Consumers (second-consumer rule satisfied):**
+- Diplomat — arena host + arena player (`p:\shared\diplomat\CLANKMATES_ARENA_PLAN.md` Phase C depends on this)
+- Clanker Courts — future `game_transport` Clankmates adapter (`p:\shared\clankercourts\PROJECT.md:21,49`)
+
+**Deferred sub-steps (not queued yet):**
+- **4.2** — Host-side ops (`post_publish`, `post_public_list`, `channel_create`, `channel_token_issue`, `schema_set/show/remove/acceptance`). Depends on `p:\shared\diplomat\CLANKMATES_NOTES.md` from arena Phase A. Queue once that file exists.
+- **4.6** — Final governance + cross-consumer integration check. Queue after 4.2 ships and arena Phase C contract is firm.
+
+**Upstream tracking caveat:** Viktor (player-client maintainer) is finishing local testing and may update the protocol/skills before going public. Record vendor commit hash in `subprocess.py` module docstring; diff and port upstream changes after his public launch.
+
+Steps:
+
+- [ ] 4.1 — **Module skeleton + vendored player-side wrapper.** Create `toolkit/src/toolkit/clankmates_client/__init__.py` and `subprocess.py`. Vendor `clankmates.py` verbatim from the player-client repo (preserve `ClankmatesError` shape and `_run_json` pattern; add `SOURCE:` attribution + commit hash in module docstring). Vendor methods: `whoami`, `list_threads`, `show_thread`, `archive_thread`, `send`, `reply`. Write `ARCH_clankmates_client.md` skeleton covering the contract. Port upstream's `tests/test_clankmates.py` to `tests/clankmates_client/test_subprocess.py` with a fake `runner`. Run toolkit regression.
+
+- [ ] 4.3 — **`decode` submodule.** Create `toolkit/src/toolkit/clankmates_client/decode.py`. Port game-agnostic helpers from `clanker_courts_player/messages.py`: `decode_clankmates_message`, `message_timestamp`, `filter_by_body_type`, `latest_by_timestamp`. Vendor fixtures from player-client `tests/fixtures/*.json` for tests at `tests/clankmates_client/test_decode.py`. Game-specific helpers (`latest_unseen_phase_report`, `recent_peer_diplomacy`) stay in consumers. Run toolkit regression.
+
+- [ ] 4.4 — **`cursor` submodule.** Create `toolkit/src/toolkit/clankmates_client/cursor.py`. Extract `ThreadCursorStore` (JSON-backed `{thread_id: (last_cursor, last_processed_message_id)}` persistence) and `filter_unseen(messages, processed_ids)` helper from patterns in `clanker_courts_player/state_store.py`. Tests at `tests/clankmates_client/test_cursor.py` cover tempdir round-trip, restart-replay scenario (kill, restart, verify no replay), unseen-filter idempotency. Run toolkit regression.
+
+- [ ] 4.5 — **`screen` submodule.** Create `toolkit/src/toolkit/clankmates_client/screen.py`. Extract peer-DM screening rules from `clanker-courts-operator/SKILL.md:140-164`: body-type match, recipient match, sender-address-vs-claimed-from spoofing check, known-active-sender membership, expected extra body fields. Returns `ScreeningResult(accepted, reasons)`. Tests at `tests/clankmates_client/test_screen.py` cover happy path + each failure mode + an explicit spoofing case. Run toolkit regression.
 
 ## Phase 3: Structured LLM — Extract from Diplomat
 
@@ -64,7 +93,7 @@ Steps:
 
 - [x] 3.2 — **Create `toolkit/structured_llm/` module.** Implement `__init__.py`, `core.py` with the five functions extracted from diplomat. All functions are standalone (no classes needed). `validate_json_schema` takes an optional `label` parameter for error message prefixing (replaces diplomat's per-module "State patch failed..." / "Intelligence report failed..." variants). Add unit tests: parse valid/invalid JSON, schema validation pass/fail with path formatting, load_prompt/load_schema, structured_complete with fake client. Run toolkit regression.
 
-- [ ] 3.3 — **Update diplomat to use toolkit utilities.** Replace diplomat's local copies:
+- [x] 3.3 — **Update diplomat to use toolkit utilities.** Replace diplomat's local copies:
   - `extraction/__init__.py`: replace `parse_json_object`, `load_prompt`, `load_schema`, `validate_state_patch` body with imports from `toolkit.structured_llm`
   - `analyst/__init__.py`: replace `validate_intelligence_report` body, remove `parse_json_object` import from extraction, replace `_complete()` with `structured_complete`
   - `adversarial/__init__.py`: same as analyst — replace validate + complete
@@ -73,9 +102,15 @@ Steps:
   - Update diplomat tests — fakes may need adjustment if `_complete` signature changed
   - Run diplomat full regression (212 tests)
 
-- [ ] 3.4 — **Generate `deps/toolkit_api.md` for diplomat.** Create the vendored contract file covering all toolkit modules diplomat depends on: `llm_client`, `telegram_client`, `cost_accountant`, `prompt_regression`, `structured_llm`. Extract exact type signatures from toolkit source. This replaces ARCH-prose-based fake building for future phases.
+  Verified 2026-06-10: 6 diplomat call sites import from `toolkit.structured_llm` (adversarial, analyst, extraction, generation, reconciliation, tools/scenario_compiler).
 
-- [ ] 3.5 — **Documentation and regression.** Verify both toolkit and diplomat test suites pass. Update toolkit ARCHITECTURE.md, DEVPLAN summary. Transition to `state: review`.
+- [~] 3.4 — **Generate `deps/toolkit_api.md` for diplomat.** ~~Create the vendored contract file covering all toolkit modules diplomat depends on...~~
+
+  **Superseded 2026-06-10 by `p:\shared\toolkit\API.md`.** The single-canonical-doc-in-toolkit approach replaces the per-consumer vendored-deps idea: one source of truth (no N-way drift), consumers attach `API.md` to sessions ad-hoc. Maintenance now governed by `PROJECT.md` Constraints ("API contract doc" bullet — update alongside any public-symbol change).
+
+- [x] 3.5 — **Documentation and regression.** Verify both toolkit and diplomat test suites pass. Update toolkit ARCHITECTURE.md, DEVPLAN summary. Transition to `state: review`.
+
+  Completed 2026-06-10: ARCHITECTURE.md Implementation Sequence updated (Structured LLM "In progress" → "Complete"); frontmatter transitioned to `state: review`; API.md added to `.llms/rules/toolkit.md` Always Loaded; PROJECT.md Constraints updated with API.md maintenance rule.
 
 ## Phase 2: Prompt Regression — Extract from Diplomat
 
@@ -150,3 +185,5 @@ Implemented typed cost budgets, pricing and estimates, append-only JSONL ledger 
 | 2026-05-17 | Cost Accountant Phase 1 complete | Core implementation complete; 28 tests passing; blocked for human audit |
 | 2026-05-28 | Phase 2 plan: prompt_regression extraction | state → execute; runner dispatch will be consumer-provided via callback |
 | 2026-05-28 | Phase 3 plan: structured_llm extraction | state -> execute; reusable LLM JSON/schema helpers will be extracted from diplomat |
+| 2026-06-10 | Phase 4 queued: clankmates_client — sub-steps 4.1, 4.3, 4.4, 4.5 (vendor + decode + cursor + screen) | Vendor source: `p:\shared\clanker-courts-player-client` (2026-06-10 HEAD). Sub-step 4.2 (host ops) deferred pending arena Phase A; 4.6 (governance) deferred to end. Full plan: `CLANKMATES_CLIENT_PLAN.md`. Second consumer (CC) confirmed by operator. |
+| 2026-06-10 | Phase 3 closed: structured_llm complete (state → review) | 3.3 verified by code inspection (6 diplomat call sites import from `toolkit.structured_llm`); 3.4 superseded by `toolkit/API.md` (single canonical contract surface replaces per-consumer vendoring; maintenance rule added to PROJECT.md Constraints); 3.5 doc cleanup done (ARCHITECTURE.md status → Complete, `.llms/rules/toolkit.md` Always Loaded includes API.md). |

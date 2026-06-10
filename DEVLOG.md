@@ -244,3 +244,14 @@ installed into a temporary local target because the shared venv is not
 writable, `numpy` is absent for embedding/clustering, and collecting all test
 directories together hits existing duplicate `test_core.py` module-name
 collisions. The temporary dependency target was removed after verification.
+
+## 2026-06-10 — structured_llm: phase review
+
+**Module:** structured_llm | **Phase:** 3 Review | **Result:** 22 tests passing
+
+**Review findings applied:**
+- Removed unused `field` import from `dataclasses` (dead import, must-fix)
+- Removed unreachable fallback `return StructuredResult(success=False, error="Unexpected state")` at end of `structured_call` retry loop — the loop always returns inside itself (should-fix)
+- Added 3 tests for `parse_json_response` code-fence stripping: `json`-tagged fence, plain fence, prose-with-embedded-JSON rejection — key behavior per ARCH spec was untested (should-fix)
+
+**State transition:** review → close
