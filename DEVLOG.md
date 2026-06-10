@@ -151,3 +151,18 @@ Outcome: 12/12 new tests passing in `tests/clankmates_client/test_screen.py`. Fu
 Contract changes: Added `src/toolkit/clankmates_client/screen.py`, `tests/clankmates_client/test_screen.py`, updated `__init__.py` exports (`ScreeningResult`, `screen_peer_message`).
 
 Implemented `screen_peer_message` applying five sequential checks: body type, recipient (`to_player_id`), spoofing (transport sender vs body's claimed `from_player_id`), known-active-sender membership, and extra body field equality. All failures accumulate into `reasons` tuple; `accepted=True` only when reasons is empty. The message dict is expected to be a decoded message (from `decode_clankmates_message`) with `body` (dict) and `raw` sub-dict carrying a `sender` key for the Clankmates transport-level sender address. The vendor SKILL.md (lines 140-164) was inaccessible (`p:\shared` not mounted), so the implementation is derived from the spec in CLANKMATES_CLIENT_PLAN.md Phase 5 and the existing fixture/message shapes. Tests cover all five failure modes independently, an explicit spoofing case, missing sender field, non-dict body, and multi-failure accumulation.
+
+---
+
+## 2026-06-10 — Phase 4 Review: Clankmates Client
+Phase: 4 (Review)
+Mode: Build
+Outcome: 43/43 clankmates tests pass. ARCH updated. State → close. Blocked for human audit.
+Contract changes: Updated `ARCH_clankmates_client.md` (no source changes).
+
+Review found no correctness or architecture violations in source code. All four submodules (subprocess, decode, cursor, screen) implement their contracts cleanly. ARCH had four documentation gaps fixed:
+1. State section said "No persistent state" — wrong; cursor.py adds JSON-backed ThreadCursorStore with atomic writes. Corrected.
+2. Public API section was missing cursor and screen submodule documentation. Added CursorState, ThreadCursorStore, filter_unseen, ScreeningResult, screen_peer_message with signatures.
+3. Types section was missing CursorState and ScreeningResult. Added.
+4. Notes section had stale "future phases" language (decode.py/cursor.py/screen.py as future work). Replaced with deferred-steps note (4.2 host ops, 4.6 governance).
+Also clarified that decode functions are accessed via `toolkit.clankmates_client.decode` submodule path (not re-exported from __init__), consistent with how tests import them.
