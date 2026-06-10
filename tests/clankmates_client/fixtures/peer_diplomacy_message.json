@@ -1,0 +1,10 @@
+{
+  "type": "diplomacy_message",
+  "game_id": "demo",
+  "from_player_id": "red",
+  "to_player_id": "blue",
+  "turn": 1,
+  "phase": "movement",
+  "body": "Hold the center.",
+  "unknown_future_field": {"kept": true}
+}

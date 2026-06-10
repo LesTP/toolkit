@@ -1,0 +1,124 @@
+{
+  "messages": [
+    {
+      "id": "dm-00",
+      "thread_id": "td",
+      "created_at": "2026-06-03T00:00:00Z",
+      "attributes": {
+        "body": "{\"type\":\"diplomacy_message\",\"game_id\":\"other\",\"from_player_id\":\"red\",\"to_player_id\":\"blue\",\"turn\":1,\"phase\":\"movement\",\"body\":\"other game\"}"
+      }
+    },
+    {
+      "id": "dm-01",
+      "thread_id": "td",
+      "created_at": "2026-06-03T00:01:00Z",
+      "attributes": {
+        "body": "{\"type\":\"diplomacy_message\",\"game_id\":\"demo\",\"from_player_id\":\"red\",\"to_player_id\":\"green\",\"turn\":1,\"phase\":\"movement\",\"body\":\"not involved\"}"
+      }
+    },
+    {
+      "id": "dm-02",
+      "thread_id": "td",
+      "created_at": "2026-06-03T00:02:00Z",
+      "attributes": {
+        "body": "{\"type\":\"diplomacy_message\",\"game_id\":\"demo\",\"from_player_id\":\"red\",\"to_player_id\":\"blue\",\"turn\":1,\"phase\":\"movement\",\"body\":\"message 01\"}"
+      }
+    },
+    {
+      "id": "dm-03",
+      "thread_id": "td",
+      "created_at": "2026-06-03T00:03:00Z",
+      "attributes": {
+        "body": "{\"type\":\"diplomacy_message\",\"game_id\":\"demo\",\"from_player_id\":\"blue\",\"to_player_id\":\"red\",\"turn\":1,\"phase\":\"movement\",\"body\":\"message 02\"}"
+      }
+    },
+    {
+      "id": "dm-04",
+      "thread_id": "td",
+      "created_at": "2026-06-03T00:04:00Z",
+      "attributes": {
+        "body": "{\"type\":\"diplomacy_message\",\"game_id\":\"demo\",\"from_player_id\":\"red\",\"to_player_id\":\"blue\",\"turn\":1,\"phase\":\"movement\",\"body\":\"message 03\"}"
+      }
+    },
+    {
+      "id": "dm-05",
+      "thread_id": "td",
+      "created_at": "2026-06-03T00:05:00Z",
+      "attributes": {
+        "body": "{\"type\":\"diplomacy_message\",\"game_id\":\"demo\",\"from_player_id\":\"blue\",\"to_player_id\":\"red\",\"turn\":1,\"phase\":\"movement\",\"body\":\"message 04\"}"
+      }
+    },
+    {
+      "id": "dm-06",
+      "thread_id": "td",
+      "created_at": "2026-06-03T00:06:00Z",
+      "attributes": {
+        "body": "{\"type\":\"diplomacy_message\",\"game_id\":\"demo\",\"from_player_id\":\"red\",\"to_player_id\":\"blue\",\"turn\":1,\"phase\":\"movement\",\"body\":\"message 05\"}"
+      }
+    },
+    {
+      "id": "dm-07",
+      "thread_id": "td",
+      "created_at": "2026-06-03T00:07:00Z",
+      "attributes": {
+        "body": "{\"type\":\"diplomacy_message\",\"game_id\":\"demo\",\"from_player_id\":\"blue\",\"to_player_id\":\"red\",\"turn\":1,\"phase\":\"movement\",\"body\":\"message 06\"}"
+      }
+    },
+    {
+      "id": "dm-08",
+      "thread_id": "td",
+      "created_at": "2026-06-03T00:08:00Z",
+      "attributes": {
+        "body": "{\"type\":\"diplomacy_message\",\"game_id\":\"demo\",\"from_player_id\":\"red\",\"to_player_id\":\"blue\",\"turn\":1,\"phase\":\"movement\",\"body\":\"message 07\"}"
+      }
+    },
+    {
+      "id": "dm-09",
+      "thread_id": "td",
+      "created_at": "2026-06-03T00:09:00Z",
+      "attributes": {
+        "body": "{\"type\":\"diplomacy_message\",\"game_id\":\"demo\",\"from_player_id\":\"blue\",\"to_player_id\":\"red\",\"turn\":1,\"phase\":\"movement\",\"body\":\"message 08\"}"
+      }
+    },
+    {
+      "id": "dm-10",
+      "thread_id": "td",
+      "created_at": "2026-06-03T00:10:00Z",
+      "attributes": {
+        "body": "{\"type\":\"diplomacy_message\",\"game_id\":\"demo\",\"from_player_id\":\"red\",\"to_player_id\":\"blue\",\"turn\":1,\"phase\":\"movement\",\"body\":\"message 09\"}"
+      }
+    },
+    {
+      "id": "dm-11",
+      "thread_id": "td",
+      "created_at": "2026-06-03T00:11:00Z",
+      "attributes": {
+        "body": "{\"type\":\"diplomacy_message\",\"game_id\":\"demo\",\"from_player_id\":\"blue\",\"to_player_id\":\"red\",\"turn\":1,\"phase\":\"movement\",\"body\":\"message 10\"}"
+      }
+    },
+    {
+      "id": "dm-12",
+      "thread_id": "td",
+      "created_at": "2026-06-03T00:12:00Z",
+      "attributes": {
+        "body": "{\"type\":\"diplomacy_message\",\"game_id\":\"demo\",\"from_player_id\":\"red\",\"to_player_id\":\"blue\",\"turn\":1,\"phase\":\"movement\",\"body\":\"message 11\"}"
+      }
+    },
+    {
+      "id": "dm-13",
+      "thread_id": "td",
+      "created_at": "2026-06-03T00:13:00Z",
+      "attributes": {
+        "body": "{\"type\":\"diplomacy_message\",\"game_id\":\"demo\",\"from_player_id\":\"blue\",\"to_player_id\":\"red\",\"turn\":1,\"phase\":\"movement\",\"body\":\"message 12\"}"
+      }
+    },
+    {
+      "id": "dm-14",
+      "thread_id": "td",
+      "created_at": "2026-06-03T00:14:00Z",
+      "attributes": {
+        "body": "{\"type\":\"diplomacy_message\",\"game_id\":\"demo\",\"from_player_id\":\"red\",\"to_player_id\":\"blue\",\"turn\":1,\"phase\":\"movement\",\"body\":\"message 13\"}"
+      }
+    }
+  ]
+}

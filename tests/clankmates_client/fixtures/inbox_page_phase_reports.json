@@ -1,0 +1,25 @@
+{
+  "messages": [
+    {
+      "id": "m-other",
+      "created_at": "2026-06-07T10:00:00Z",
+      "attributes": {
+        "body": "{\"type\":\"movement_phase_report\",\"game_id\":\"other\",\"phase_id\":\"other:turn-01:movement\",\"turn\":1,\"phase\":\"movement\",\"visibility\":{}}"
+      }
+    },
+    {
+      "id": "m-old",
+      "created_at": "2026-06-07T10:01:00Z",
+      "attributes": {
+        "body": "{\"type\":\"setup_report\",\"game_id\":\"demo\",\"rules\":\"clanker-courts-v10\",\"final_turn\":24,\"phase_id\":\"demo:turn-01:reinforcement\",\"turn\":1,\"phase\":\"reinforcement\",\"phase_clock_ms\":{\"reinforcement\":60000,\"movement\":120000},\"capital_location_id\":\"B\",\"players\":[],\"visibility\":{}}"
+      }
+    },
+    {
+      "id": "m-new",
+      "created_at": "2026-06-07T10:02:00Z",
+      "attributes": {
+        "body": "{\"type\":\"movement_phase_report\",\"game_id\":\"demo\",\"phase_id\":\"demo:turn-01:movement\",\"turn\":1,\"phase\":\"movement\",\"visibility\":{}}"
+      }
+    }
+  ]
+}

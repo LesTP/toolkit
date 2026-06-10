@@ -1,0 +1,7 @@
+{
+  "type": "start_cancelled",
+  "game_id": "demo",
+  "reason": "player_not_ready",
+  "open_slots": 1,
+  "unknown_future_field": {"kept": true}
+}

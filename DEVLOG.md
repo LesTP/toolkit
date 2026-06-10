@@ -124,3 +124,12 @@ Contract changes: Added `src/toolkit/clankmates_client/__init__.py`, `src/toolki
 Vendored the upstream synchronous `clankm` wrapper into `toolkit.clankmates_client.subprocess` with the preserved `ClankmatesError` payload and `_run_json` error handling path. Added the source attribution and upstream commit hash to the module docstring, and ported the upstream test pattern to a fake-runner regression suite under `tests/clankmates_client/`.
 
 The new package is deliberately small: it exposes only the client and error types for now, keeping later decode/cursor/screen work in the queued phase-4 steps.
+
+## 2026-06-10 — Clankmates Client Step 4.3
+
+### Step 4.3: `decode` submodule
+Mode: Build
+Outcome: Passed 13/13 `tests/clankmates_client` tests after adding the decode helpers and fixture suite.
+Contract changes: Added `src/toolkit/clankmates_client/decode.py`, `tests/clankmates_client/test_decode.py`, vendored decode fixtures under `tests/clankmates_client/fixtures/`, and updated `ARCH_clankmates_client.md` plus `API.md`.
+
+Split the generic Clankmates message helpers out of the upstream player-client `messages.py` pattern into a leaf `decode` module: `decode_clankmates_message`, `message_timestamp`, `filter_by_body_type`, and `latest_by_timestamp`. Kept the game-specific selectors out of the toolkit as planned, and used vendored inbox fixtures to cover both timestamp ordering and body-type filtering.

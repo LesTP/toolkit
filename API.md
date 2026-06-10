@@ -281,6 +281,15 @@ reply(profile: str, thread_id: str, body: dict[str, Any]) -> dict[str, Any]
 to_dict() -> dict[str, Any]
 ```
 
+### Functions (toolkit.clankmates_client.decode)
+
+```python
+decode_clankmates_message(message: dict[str, Any]) -> dict[str, Any]
+message_timestamp(message: dict[str, Any]) -> str | None
+filter_by_body_type(messages: list[dict[str, Any]], body_type: str) -> list[dict[str, Any]]
+latest_by_timestamp(messages: list[dict[str, Any]]) -> dict[str, Any] | None
+```
+
 ---
 
 ## toolkit.cost_accountant

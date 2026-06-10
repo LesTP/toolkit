@@ -50,6 +50,15 @@ Raised when `clankm` cannot be executed, exits non-zero, or returns malformed JS
 - **Fields:** `command`, `returncode`, `stdout`, `stderr`, `decode_error`, `timeout`
 - **Method:** `to_dict() -> dict[str, Any]`
 
+### Decode helpers
+
+The `decode.py` submodule provides generic inbox message helpers:
+
+- `decode_clankmates_message(message: dict[str, Any]) -> dict[str, Any]`
+- `message_timestamp(message: dict[str, Any]) -> str | None`
+- `filter_by_body_type(messages: list[dict[str, Any]], body_type: str) -> list[dict[str, Any]]`
+- `latest_by_timestamp(messages: list[dict[str, Any]]) -> dict[str, Any] | None`
+
 ## Types
 
 ```python
@@ -76,4 +85,4 @@ thread = client.show_thread("arena-host", "thread-123", limit=20)
 
 - The wrapper stays synchronous to match the upstream player-client behavior.
 - Phase 2 will extend this module with host-side operations.
-- Phase 3, 4, and 5 will add `decode.py`, `cursor.py`, and `screen.py` respectively.
+- Phase 2 adds `decode.py`; later phases add `cursor.py` and `screen.py`.

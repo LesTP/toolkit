@@ -1,0 +1,5 @@
+{
+  "type": "join_game",
+  "game_id": "demo",
+  "unknown_future_field": {"kept": true}
+}

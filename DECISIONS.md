@@ -73,3 +73,10 @@ Priority: Important
 Decision: Phase 4 (this iteration) implements steps 4.1, 4.3, 4.4, 4.5 only: player-side subprocess wrapper (vendored), message decoders, thread-cursor store, and peer-DM screener. Host-side ops (step 4.2: `post_publish`, `channel_create`, typed-inbox schema management) are deferred until `p:\shared\diplomat\CLANKMATES_NOTES.md` exists (arena Phase A output, which documents the exact CLI surface for host-side commands). Step 4.6 (governance + integration check) defers until 4.2 ships and arena Phase C contract is firm.
 Rationale: Host-side ops require confirming exact `clankm` subcommand flags against a live host session (arena Phase A). Implementing against speculative flags risks a breaking rework when the actual surface is confirmed. Player-side ops are fully validated in the upstream player-client test suite and can be vendored safely now. Both consumers (Diplomat arena, Clanker Courts game_transport) need the player-side + generic helpers immediately.
 Revisit if: Arena Phase A completes and `CLANKMATES_NOTES.md` is written — then queue 4.2 in DEVPLAN.
+
+D-9: clankmates_client decode stays generic; game-specific selectors remain consumer-side
+Date: 2026-06-10 | Status: Closed
+Priority: Routine
+Decision: `toolkit.clankmates_client.decode` exports only the generic inbox helpers (`decode_clankmates_message`, `message_timestamp`, `filter_by_body_type`, `latest_by_timestamp`). The game-specific selectors from the upstream player-client (`latest_unseen_phase_report`, `recent_peer_diplomacy`) stay in consumers.
+Rationale: The generic inbox decode and timestamp logic is reusable across consumers, but the game-specific selectors are coupled to Clanker Courts message semantics and would turn the leaf module into a feature module. Keeping only the generic helpers preserves the leaf boundary and lets consumers compose their own selectors on top.
+Revisit if: Another consumer needs the exact upstream selectors verbatim and the project decides they are generic enough to promote.

@@ -1,0 +1,8 @@
+{
+  "type": "order_rejected",
+  "game_id": "demo",
+  "phase_id": "demo:turn-01:movement",
+  "errors": [{"code": "stale_phase", "details": {"expected": "demo:turn-02:movement"}}],
+  "ready": false,
+  "unknown_future_field": {"kept": true}
+}

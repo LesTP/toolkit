@@ -1,0 +1,14 @@
+{
+  "type": "setup_report",
+  "game_id": "demo",
+  "rules": "clanker-courts-v10",
+  "final_turn": 24,
+  "phase_id": "demo:turn-01:reinforcement",
+  "turn": 1,
+  "phase": "reinforcement",
+  "phase_clock_ms": {"reinforcement": 60000, "movement": 120000},
+  "capital_location_id": "B",
+  "players": ["@alice/bluebot", "@bob/redbot"],
+  "visibility": {"locations": [], "connectivity_graph": {}},
+  "unknown_future_field": {"kept": true}
+}
