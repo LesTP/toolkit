@@ -44,6 +44,7 @@ The author's own projects. Currently: Phosphene (autonomous personality agent), 
 - **Interfaces:** Typed dataclasses at every boundary
 - **Independence:** Each module is a standalone package with its own `types.py` and tests. Leaf modules have no imports from other toolkit modules. Composing modules (see Scope) may import exactly one leaf module, declared explicitly in the module's ARCH file.
 - **Provenance:** Modules adapted from existing projects (TGBot, codexbot) retain their tested patterns; new modules follow the same conventions
+- **API contract doc:** `API.md` is the single canonical signature surface for every toolkit module — consumers attach it to build fakes against toolkit interfaces. Any change to a module's public symbols (added/removed/renamed function, class, dataclass, exception, or signature change on an existing one) must be reflected in `API.md` in the same change, with the `Last synced:` date bumped. New modules add their own section before they're declared complete.
 
 ## Prior Art
 - **TGBot delivery module** — telegram_client.py, telegraph_client.py, formatting.py. Working, tested, deployed.

@@ -6,6 +6,7 @@ This project follows the From Idea to Code governance framework.
 ## Always Loaded
 - @PROJECT.md — scope, constraints, "second consumer" rule
 - @ARCHITECTURE.md — component map, coupling notes, key decisions
+- @API.md — canonical public API signatures for every toolkit module; used directly when building consumer-side fakes
 
 ## Load for Current Module
 Determine the active module from ARCHITECTURE.md's Implementation Sequence table — first module without "Complete" status. Then load:

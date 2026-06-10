@@ -166,3 +166,22 @@ Review found no correctness or architecture violations in source code. All four 
 3. Types section was missing CursorState and ScreeningResult. Added.
 4. Notes section had stale "future phases" language (decode.py/cursor.py/screen.py as future work). Replaced with deferred-steps note (4.2 host ops, 4.6 governance).
 Also clarified that decode functions are accessed via `toolkit.clankmates_client.decode` submodule path (not re-exported from __init__), consistent with how tests import them.
+
+---
+
+## 2026-06-10 — Clankmates Client Phase 4 CLOSE
+
+**Module:** Clankmates Client | **Phase:** 4 | **Regime:** Build | **Result:** Queued steps complete; 43 tests; blocked for human audit
+
+Phase 4 queued steps (4.1, 4.3, 4.4, 4.5) shipped and reviewed. Deferred steps (4.2 host ops, 4.6 governance) remain pending external prerequisites.
+
+**CLOSE doc cleanup:**
+- ARCHITECTURE.md row 14: "In progress" → "Complete (queued steps 4.1, 4.3, 4.4, 4.5; 43 tests; steps 4.2 and 4.6 deferred)"
+- DEVPLAN Current Status: Clankmates Client row updated to reflect queued-steps completion and deferred-step status
+- DEVPLAN Phase 4 Status header updated from "Active" to "Complete (queued steps)"
+- Gotcha added: `p:\shared` not mounted in container — SKILL.md was inaccessible during step 4.5; spec-driven implementation used instead
+- Change History row appended
+
+**Tests at close:** 43/43 clankmates_client tests pass. Stable-module regression clean.
+
+**Deferred work:** 4.2 (host-side ops: `post_publish`, `channel_create`, `channel_token_issue`, etc.) — queue once `p:\shared\diplomat\CLANKMATES_NOTES.md` exists from arena Phase A. 4.6 (governance + cross-consumer integration check) — queue after 4.2 ships and arena Phase C contract is firm.

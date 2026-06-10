@@ -1,6 +1,6 @@
 ---
 phase: 4
-blocked: false
+blocked: true
 state: close
 steps_remaining: 0
 ---
@@ -21,6 +21,7 @@ Consumers: Diplomat (arena host + player), Clanker Courts (game_transport adapte
 - **Vendor source:** `p:\shared\clanker-courts-player-client\skills\clanker-courts-operator\scripts\clanker_courts_player\`
 - **Submodules:** `subprocess.py` (vendored wrapper), `decode.py` (message decoders), `cursor.py` (thread cursor store), `screen.py` (peer-DM screening rules)
 - **Record vendor commit hash** in `subprocess.py` module docstring for upstream diff tracking.
+- **`p:\shared` not mounted in container:** Vendor SKILL.md and upstream source files at `p:\shared\...` are inaccessible from the worker. Implement from the ARCH/PLAN spec instead; note in DEVLOG that the SKILL.md source was unavailable so the spec drove the implementation.
 
 ## Current Status
 | Module | Status |
@@ -33,13 +34,13 @@ Consumers: Diplomat (arena host + player), Clanker Courts (game_transport adapte
 | Cost Accountant | Complete (Phase 1, 28 tests) |
 | Prompt Regression | Complete (Phase 2, 26 tests) |
 | Structured LLM | Complete (Phase 3) |
-| Clankmates Client | Active (Phase 4 — steps 4.1, 4.3, 4.4, 4.5 done; queued steps complete) |
+| Clankmates Client | Complete (queued steps 4.1, 4.3, 4.4, 4.5; 43 tests; steps 4.2, 4.6 deferred) |
 
 ## Phase 4: Clankmates Client — Vendor + Extend from clanker-courts-player-client
 
-**Status:** Active
+**Status:** Complete (queued steps 4.1, 4.3, 4.4, 4.5; 43 tests). Steps 4.2 and 4.6 remain deferred.
 **Regime:** Build
-**Plan:** `CLANKMATES_CLIENT_PLAN.md` (six phases total; this DEVPLAN queues sub-steps 4.1, 4.3, 4.4, 4.5 — the four that don't depend on external work).
+**Plan:** `CLANKMATES_CLIENT_PLAN.md` (six phases total; this DEVPLAN queued sub-steps 4.1, 4.3, 4.4, 4.5 — the four that don't depend on external work).
 
 Vendor `clankmates.py` from `p:\shared\clanker-courts-player-client\skills\clanker-courts-operator\scripts\clanker_courts_player\` as `toolkit/clankmates_client/subprocess.py`, then port `messages.py` decoders, `state_store.py` cursor helpers, and the peer-DM screening rules from the operator SKILL.md as separate submodules.
 
@@ -186,3 +187,4 @@ Implemented typed cost budgets, pricing and estimates, append-only JSONL ledger 
 | 2026-05-28 | Phase 3 plan: structured_llm extraction | state -> execute; reusable LLM JSON/schema helpers will be extracted from diplomat |
 | 2026-06-10 | Phase 4 queued: clankmates_client — sub-steps 4.1, 4.3, 4.4, 4.5 (vendor + decode + cursor + screen) | Vendor source: `p:\shared\clanker-courts-player-client` (2026-06-10 HEAD). Sub-step 4.2 (host ops) deferred pending arena Phase A; 4.6 (governance) deferred to end. Full plan: `CLANKMATES_CLIENT_PLAN.md`. Second consumer (CC) confirmed by operator. |
 | 2026-06-10 | Phase 3 closed: structured_llm complete (state → review) | 3.3 verified by code inspection (6 diplomat call sites import from `toolkit.structured_llm`); 3.4 superseded by `toolkit/API.md` (single canonical contract surface replaces per-consumer vendoring; maintenance rule added to PROJECT.md Constraints); 3.5 doc cleanup done (ARCHITECTURE.md status → Complete, `.llms/rules/toolkit.md` Always Loaded includes API.md). |
+| 2026-06-10 | Phase 4 closed: clankmates_client queued steps complete (43 tests) | Steps 4.1 (subprocess), 4.3 (decode), 4.4 (cursor), 4.5 (screen) shipped. Steps 4.2 (host ops) and 4.6 (governance) remain deferred. ARCH updated; gotcha added for `p:\shared` inaccessibility. |

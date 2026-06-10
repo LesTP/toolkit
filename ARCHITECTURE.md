@@ -61,7 +61,7 @@ Diplomat:        Prompt scenarios → Prompt Regression → diplomat module call
 | 11 | Feedback Collector | Platform signal normalisation extracted from Phosphene. Memory store contract is duck-typed (no toolkit-cross-import). | Complete — extracted 2026-06 |
 | 12 | Coaching | Tag-based operator-input parser extracted from Diplomat. YAML config (lazy-imported) or pre-parsed dict. Clanker Courts incoming as second consumer. | Complete — extracted 2026-06-05 |
 | 13 | Edit Classifier | LLM-as-judge categorical classifier extracted from Diplomat. Six-category enum (project-side factory + prompt). Clanker Courts incoming as second consumer. | Complete — extracted 2026-06-07 |
-| 14 | Clankmates Client | Subprocess wrapper + message decoders + cursor store + peer-DM screener. Vendored from clanker-courts-player-client; extended for toolkit reuse. Consumers: Diplomat (arena), Clanker Courts. | In progress |
+| 14 | Clankmates Client | Subprocess wrapper + message decoders + cursor store + peer-DM screener. Vendored from clanker-courts-player-client; extended for toolkit reuse. Consumers: Diplomat (arena), Clanker Courts. | Complete (queued steps 4.1, 4.3, 4.4, 4.5; 43 tests; steps 4.2 host-ops and 4.6 governance deferred pending arena Phase A) |
 
 ## Coupling Notes
 
