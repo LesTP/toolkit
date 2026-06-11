@@ -59,28 +59,122 @@ class ClankmatesClient:
 
 ### Phase 2 — Host-side operations
 
-**Discovered surface** (from `p:\shared\diplomat\skill.md` + `clankm inbox schema --help` screenshot + Phase A of the arena plan):
+**Discovered surface** (verified live 2026-06-11; canonical reference is `p:\shared\diplomat\CLANKMATES_NOTES.md`):
 
 ```python
 class ClankmatesClient:
-    # Posts & feed
-    def post_publish(self, profile: str, channel: str, body: str) -> dict: ...
-    def post_public_list(self, profile: str, handle: str, channel: str, *, limit: int = 10) -> dict: ...
+    # --- Inbox: expanded from 4.1 to support typed inboxes ---
+    # 4.1 shipped: send(profile, recipient, body: dict) -- always serialized to --body (markdown path).
+    # 4.2 BREAKING-BUT-ADDITIVE: typed inboxes require --payload, not --body.
+    # Existing body=<dict> callers must migrate to payload=<dict> when sending to typed inboxes
+    # (server rejects body-encoded typed payloads silently). Free-text markdown stays on body/body_file.
+    def send(
+        self,
+        profile: str,
+        recipient: str,            # @handle, @handle/channel, user UUID, or channel UUID
+        *,
+        body: str | None = None,           # markdown
+        body_file: str | Path | None = None,
+        payload: dict | None = None,       # typed-inbox JSON object
+        payload_file: str | Path | None = None,
+        from_channel: str | None = None,   # send on behalf of one of the owner's channels
+        context_post_id: str | None = None,
+        channel_token: str | None = None,  # explicit channel-token auth, alternative to profile creds
+    ) -> dict:
+        """Exactly one of body/body_file/payload/payload_file. Typed inboxes require payload*."""
 
-    # Channel + key management (master-key paths)
+    def reply(
+        self,
+        profile: str,
+        thread_id: str,
+        *,
+        body: str | None = None,
+        body_file: str | Path | None = None,
+        payload: dict | None = None,
+        payload_file: str | Path | None = None,
+        channel_token: str | None = None,
+    ) -> dict: ...
+
+    # --- Posts ---
+    def post_publish(
+        self,
+        profile: str,
+        *,
+        channel: str,
+        body: str | None = None,           # markdown inline
+        body_file: str | Path | None = None,  # USE THIS for multiline -- inline shell quotes lose \n
+        channel_token: str | None = None,
+    ) -> dict: ...
+    def post_public_list(
+        self,
+        profile: str,
+        public_handle: str,
+        channel_name: str,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> dict: ...
+
+    # --- Channel management ---
     def channel_create(self, profile: str, *, name: str, description: str | None = None) -> dict: ...
-    def channel_token_issue(self, profile: str, channel: str, *, name: str) -> dict: ...
+    def channel_list(self, profile: str) -> dict: ...                        # returns {items: [...]}
+    def channel_get(self, profile: str, name_or_uuid: str) -> dict: ...
+    def channel_publish_public(self, profile: str, name_or_uuid: str) -> dict: ...
+    def channel_unpublish_public(self, profile: str, name_or_uuid: str) -> dict: ...
+    def channel_delete(self, profile: str, name_or_uuid: str) -> dict: ...   # returns {ok: True, id: <uuid>}
 
-    # Typed inbox schemas
-    def schema_set(self, profile: str, *, channel: str | None = None, account: bool = False, schema: dict) -> dict: ...
-    def schema_show(self, profile: str, *, channel: str | None = None, account: bool = False) -> dict: ...
-    def schema_remove(self, profile: str, *, channel: str | None = None, account: bool = False) -> dict: ...
-    def schema_acceptance(self, profile: str, *, channel: str | None = None, account: bool = False, accept_external: bool) -> dict: ...
+    # --- Channel tokens ---
+    def channel_token_issue(
+        self,
+        profile: str,
+        channel: str,
+        *,
+        name: str,
+        save: bool = False,
+        token_only: bool = False,
+    ) -> dict: ...                                                            # returns {id, name, token, expires_at, issued_at} -- token value ONLY returned here
+    def channel_token_list(self, profile: str, channel: str) -> dict: ...    # returns {items: [...]} without token values
+    def channel_token_revoke(self, profile: str, token_id: str) -> dict: ... # returns {id, name}
+
+    # --- Typed-inbox schemas ---
+    # Schema target = account vs channel is a CLI subcommand, not a flag -- mirror via separate methods.
+    def schema_show(self, profile: str, address: str) -> dict:
+        """address: '@handle' for account, '@handle/channel' for channel. Public discovery path."""
+
+    def schema_set_account(
+        self,
+        profile: str,
+        *,
+        schema: dict | None = None,
+        schema_file: str | Path | None = None,
+    ) -> dict: ...
+    def schema_set_channel(
+        self,
+        profile: str,
+        channel: str,
+        *,
+        schema: dict | None = None,
+        schema_file: str | Path | None = None,
+    ) -> dict: ...
+    # NOTE: schema_set_* auto-flips external_email_acceptance to accept_valid_typed_email.
+    # schema_remove_* resets it to screen_unknown_senders. No separate acceptance call is needed in the happy path.
+
+    def schema_remove_account(self, profile: str) -> dict: ...
+    def schema_remove_channel(self, profile: str, channel: str) -> dict: ...
+
+    def schema_acceptance_account(self, profile: str, mode: str) -> dict:
+        """mode: 'screen-unknown-senders' | 'accept-valid-typed-email'. Override the schema_set default."""
+    def schema_acceptance_channel(self, profile: str, channel: str, mode: str) -> dict: ...
 ```
 
-**Pre-flight requirement:** the arena plan's Phase A (host-side CLI smoke) must complete first so we know the exact `clankm` flag set for each host-side subcommand. `p:\shared\diplomat\CLANKMATES_NOTES.md` is the reference this phase codes against.
+**Pre-flight requirement:** the arena plan's Phase A (host-side CLI smoke) is **complete** — see `p:\shared\diplomat\CLANKMATES_NOTES.md` for the live-verified CLI surface. All flags, subcommand structures, and JSON response shapes referenced above are documented there. The vendored 4.1 player-side wrapper is the starting point; this phase extends it.
 
-**Tests:** `p:\shared\toolkit\tests\clankmates_client\test_host_ops.py` — fake `runner` covering each new method, schema-payload encoding, account-vs-channel target switch, error response shapes.
+**Response shape annotations** (so consumers don't have to guess):
+- JSON:API single-resource shape `{type, id, attributes, links, meta, relationships}` — most channel/post/schema/acceptance methods
+- Collection envelope `{items: [...]}` — *list*, *public-list*, *token list*
+- Flat ops — `channel_delete` returns `{ok, id}`; `channel_token_issue` returns `{id, name, token, expires_at, issued_at}`; `channel_token_revoke` returns `{id, name}`; auth methods return `{authenticated, ...}`
+
+**Tests:** `p:\shared\toolkit\tests\clankmates_client\test_host_ops.py` — fake `runner` covering each new method, schema-payload encoding (`--schema` vs `--schema-file`), account-vs-channel subcommand selection, error response shapes, body/payload-mutex enforcement for `send`/`reply`.
 
 ### Phase 3 — `decode` submodule
 
