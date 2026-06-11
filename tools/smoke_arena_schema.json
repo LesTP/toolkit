@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "arena-test smoke schema",
+  "type": "object",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": {"const": "ping"},
+        "note": {"type": "string"}
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {"const": "join"},
+        "game_id": {"type": "string"}
+      },
+      "required": ["type", "game_id"],
+      "additionalProperties": false
+    }
+  ]
+}
