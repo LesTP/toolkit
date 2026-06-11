@@ -16,7 +16,7 @@ def test_reply_uses_exact_clankm_argv_and_json_body():
     client = ClankmatesClient(runner=runner)
     body = {"type": "order_package", "orders": []}
 
-    assert client.reply("p1", "thread-1", body) == {"ok": True}
+    assert client.reply("p1", "thread-1", payload=body) == {"ok": True}
     assert calls[0][0] == [
         "clankm",
         "--profile",
@@ -24,7 +24,7 @@ def test_reply_uses_exact_clankm_argv_and_json_body():
         "inbox",
         "reply",
         "thread-1",
-        "--body",
+        "--payload",
         json.dumps(body, separators=(",", ":"), sort_keys=True),
         "--json",
     ]
@@ -52,7 +52,7 @@ def test_adapter_methods_parse_json_and_build_expected_commands():
     assert client.list_threads("p") == {"threads": []}
     assert client.show_thread("p", "t1", limit=3) == {"messages": []}
     assert client.archive_thread("p", "t1") == {"archived": True}
-    assert client.send("p", "@server", {"type": "join_game"}) == {"sent": True}
+    assert client.send("p", "@server", payload={"type": "join_game"}) == {"sent": True}
     assert calls == [
         ["clankm", "--profile", "p", "auth", "whoami", "--json"],
         ["clankm", "--profile", "p", "inbox", "list", "--status", "all", "--json"],
@@ -65,7 +65,7 @@ def test_adapter_methods_parse_json_and_build_expected_commands():
             "inbox",
             "send",
             "@server",
-            "--body",
+            "--payload",
             '{"type":"join_game"}',
             "--json",
         ],

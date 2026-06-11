@@ -185,3 +185,21 @@ Phase 4 queued steps (4.1, 4.3, 4.4, 4.5) shipped and reviewed. Deferred steps (
 **Tests at close:** 43/43 clankmates_client tests pass. Stable-module regression clean.
 
 **Deferred work:** 4.2 (host-side ops: `post_publish`, `channel_create`, `channel_token_issue`, etc.) — queue once `p:\shared\diplomat\CLANKMATES_NOTES.md` exists from arena Phase A. 4.6 (governance + cross-consumer integration check) — queue after 4.2 ships and arena Phase C contract is firm.
+
+## 2026-06-11 — Phase 4 step 4.2: host-side operations
+
+**Step:** 4.2 — Host-side operations for `clankmates_client`.
+
+**What was built:**
+- Extended `subprocess.py` with 18 new host-side methods: channel CRUD (`channel_create`, `channel_list`, `channel_get`, `channel_publish_public`, `channel_unpublish_public`, `channel_delete`), channel token management (`channel_token_issue`, `channel_token_list`, `channel_token_revoke`), post ops (`post_publish`, `post_public_list`), typed-inbox schema management (`schema_show`, `schema_set_account`, `schema_set_channel`, `schema_remove_account`, `schema_remove_channel`, `schema_acceptance_account`, `schema_acceptance_channel`).
+- BREAKING-BUT-ADDITIVE change to `send`/`reply`: old positional `body: dict` removed; all content args are now keyword-only (`body: str | None`, `body_file`, `payload: dict | None`, `payload_file`). Typed-inbox payloads must use `payload=` to reach `--payload` flag; `--body` is now for free-text markdown only.
+- Added `_content_args`, `_body_args`, `_schema_args`, `_json_compact` module-level helpers with mutex validation.
+- `test_host_ops.py`: 45 new tests covering all new methods, file variants, mutex enforcement, optional flags, error propagation, account-vs-channel subcommand selection.
+- Updated `test_subprocess.py` for new `send`/`reply` signatures (`payload=` instead of positional dict, `--payload` instead of `--body`).
+- ARCH updated with full host-side method table and response-shape reference.
+
+**Tests:** 88/88 clankmates_client tests pass (43 prior + 45 new). Toolkit regression clean for modules without heavy deps.
+
+**Note:** `p:\shared` was inaccessible from container; spec was driven by `CLANKMATES_CLIENT_PLAN.md` Phase 2 (which encoded live-verified CLI surface from arena Phase A smoke). Telegram_client test failures (9 failing) are pre-existing and unrelated to this step.
+
+**Deferred:** 4.6 (governance + cross-consumer integration check) — queue after arena Phase C contract is firm.
