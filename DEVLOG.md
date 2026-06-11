@@ -215,3 +215,11 @@ Reviewed the phase 4 output against `ARCH_clankmates_client.md` and the shipped 
 - Result: 88/88 tests passed
 
 **State transition:** DEVPLAN updated from `state: review` to `state: close` for the next loop iteration.
+
+## 2026-06-11 — Phase 4 complete: clankmates_client closed
+
+**Module:** Clankmates Client | **Phase:** 4 | **Result:** Complete
+
+Phase 4 close cleanup is done. The DEVPLAN phase summary now reflects completion,
+the architecture row is marked complete, and the close record captures the shipped
+host-side ops plus the generic decode/cursor/screen helpers.

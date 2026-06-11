@@ -1,6 +1,6 @@
 ---
 phase: 4
-blocked: false
+blocked: true
 state: close
 steps_remaining: 0
 ---
@@ -8,7 +8,7 @@ steps_remaining: 0
 # Toolkit — Dev Plan
 
 ## Cold Start
-Active module: **Clankmates Client** (Phase 4 — vendor + extend from clanker-courts-player-client).
+Active module: **Clankmates Client** (Phase 4 complete; see DEVLOG 2026-06-11).
 Load: CLANKMATES_CLIENT_PLAN.md for plan, ARCHITECTURE.md for context, PROJECT.md for constraints.
 Consumers: Diplomat (arena host + player), Clanker Courts (game_transport adapter).
 
@@ -34,63 +34,14 @@ Consumers: Diplomat (arena host + player), Clanker Courts (game_transport adapte
 | Cost Accountant | Complete (Phase 1, 28 tests) |
 | Prompt Regression | Complete (Phase 2, 26 tests) |
 | Structured LLM | Complete (Phase 3) |
-| Clankmates Client | Active (4.1/4.3/4.4/4.5 shipped — 43 tests; **4.2 queued** — host ops; 4.6 deferred) |
+| Clankmates Client | Complete (Phase 4 close; see DEVLOG 2026-06-11) |
 
 ## Phase 4: Clankmates Client — Vendor + Extend from clanker-courts-player-client
 
-**Status:** Active — step 4.2 queued for execution.
-  - Completed: 4.1 / 4.3 / 4.4 / 4.5 (43 tests, see DEVLOG 2026-06-10).
-  - **Queued (active): 4.2** — host-side ops (see step entry below). Now unblocked by arena Phase A (`p:\shared\diplomat\CLANKMATES_NOTES.md`).
-  - Deferred: 4.6 — cross-consumer integration check + final governance; queue after 4.2 ships and arena Phase C contract is firm.
+**Status:** Complete — see DEVLOG 2026-06-11.
+**Summary:** Host-side ops shipped, review was clean, and the phase closed at 88/88 tests passing.
 **Regime:** Build
-**Plan:** `CLANKMATES_CLIENT_PLAN.md` (six phases total; see Phase 2 section there for the full 4.2 spec).
-
-Vendor `clankmates.py` from `p:\shared\clanker-courts-player-client\skills\clanker-courts-operator\scripts\clanker_courts_player\` as `toolkit/clankmates_client/subprocess.py`, then port `messages.py` decoders, `state_store.py` cursor helpers, and the peer-DM screening rules from the operator SKILL.md as separate submodules.
-
-**Consumers (second-consumer rule satisfied):**
-- Diplomat — arena host + arena player (`p:\shared\diplomat\CLANKMATES_ARENA_PLAN.md` Phase C depends on this)
-- Clanker Courts — future `game_transport` Clankmates adapter (`p:\shared\clankercourts\PROJECT.md:21,49`)
-
-**Deferred sub-steps (not queued yet):**
-- **4.2** — Host-side ops (`post_publish`, `post_public_list`, `channel_create`, `channel_token_issue`, `schema_set/show/remove/acceptance`). Depends on `p:\shared\diplomat\CLANKMATES_NOTES.md` from arena Phase A. Queue once that file exists.
-- **4.6** — Final governance + cross-consumer integration check. Queue after 4.2 ships and arena Phase C contract is firm.
-
-**Upstream tracking caveat:** Viktor (player-client maintainer) is finishing local testing and may update the protocol/skills before going public. Record vendor commit hash in `subprocess.py` module docstring; diff and port upstream changes after his public launch.
-
-Steps:
-
-- [x] 4.1 — **Module skeleton + vendored player-side wrapper.** Create `toolkit/src/toolkit/clankmates_client/__init__.py` and `subprocess.py`. Vendor `clankmates.py` verbatim from the player-client repo (preserve `ClankmatesError` shape and `_run_json` pattern; add `SOURCE:` attribution + commit hash in module docstring). Vendor methods: `whoami`, `list_threads`, `show_thread`, `archive_thread`, `send`, `reply`. Write `ARCH_clankmates_client.md` skeleton covering the contract. Port upstream's `tests/test_clankmates.py` to `tests/clankmates_client/test_subprocess.py` with a fake `runner`. Run toolkit regression.
-
-- [x] 4.3 — **`decode` submodule.** Create `toolkit/src/toolkit/clankmates_client/decode.py`. Port game-agnostic helpers from `clanker_courts_player/messages.py`: `decode_clankmates_message`, `message_timestamp`, `filter_by_body_type`, `latest_by_timestamp`. Vendor fixtures from player-client `tests/fixtures/*.json` for tests at `tests/clankmates_client/test_decode.py`. Game-specific helpers (`latest_unseen_phase_report`, `recent_peer_diplomacy`) stay in consumers. Run toolkit regression.
-
-- [x] 4.4 — **`cursor` submodule.** Create `toolkit/src/toolkit/clankmates_client/cursor.py`. Extract `ThreadCursorStore` (JSON-backed `{thread_id: (last_cursor, last_processed_message_id)}` persistence) and `filter_unseen(messages, processed_ids)` helper from patterns in `clanker_courts_player/state_store.py`. Tests at `tests/clankmates_client/test_cursor.py` cover tempdir round-trip, restart-replay scenario (kill, restart, verify no replay), unseen-filter idempotency. Run toolkit regression.
-
-- [x] 4.5 — **`screen` submodule.** Create `toolkit/src/toolkit/clankmates_client/screen.py`. Extract peer-DM screening rules from `clanker-courts-operator/SKILL.md:140-164`: body-type match, recipient match, sender-address-vs-claimed-from spoofing check, known-active-sender membership, expected extra body fields. Returns `ScreeningResult(accepted, reasons)`. Tests at `tests/clankmates_client/test_screen.py` cover happy path + each failure mode + an explicit spoofing case. Run toolkit regression.
-
-- [x] 4.2 — **Host-side operations.** Extend `toolkit/src/toolkit/clankmates_client/subprocess.py` with the host-side method set documented in `CLANKMATES_CLIENT_PLAN.md` Phase 2 (canonical reference). Verified wire-level CLI surface lives in `p:\shared\diplomat\CLANKMATES_NOTES.md` (the arena Phase A deliverable).
-
-  **New methods to add** (full signatures in `CLANKMATES_CLIENT_PLAN.md` Phase 2):
-  - Channel mgmt: `channel_create`, `channel_list`, `channel_get`, `channel_publish_public`, `channel_unpublish_public`, `channel_delete`
-  - Channel tokens: `channel_token_issue`, `channel_token_list`, `channel_token_revoke`
-  - Posts: `post_publish` (with `body`/`body_file`/`channel_token` kwargs), `post_public_list`
-  - Typed-inbox schemas: `schema_show` (takes `@handle` or `@handle/channel` address), `schema_set_account`/`schema_set_channel`, `schema_remove_account`/`schema_remove_channel`, `schema_acceptance_account`/`schema_acceptance_channel`
-
-  **BREAKING-BUT-ADDITIVE change to existing 4.1 `send` and `reply` signatures.** Current 4.1 wrapper passes any `body=<dict>` to `--body` (markdown path). Typed inboxes require `--payload`, not `--body` — body-encoded typed payloads get silently rejected server-side. New signatures must support `body=<str>`, `body_file=<path>`, `payload=<dict>`, `payload_file=<path>`, plus `from_channel=<channel>` (send on behalf of an owned channel), `context_post_id=<id>`, `channel_token=<token>`. See `CLANKMATES_NOTES.md` §3 + §8 for the full new signature.
-
-  **Response-shape annotations** (don't pretend everything is JSON:API):
-  - JSON:API `{type, id, attributes, links, meta, relationships}` — most channel/post/schema methods
-  - Collection `{items: [...]}` — `*_list`, `post_public_list`, `inbox list`
-  - Flat ops — `channel_delete` returns `{ok, id}`; `channel_token_issue` returns `{id, name, token, expires_at, issued_at}` (token value ONLY returned here); `channel_token_revoke` returns `{id, name}`
-
-  **Important platform behaviors to encode in docstrings:**
-  - `schema_set_channel` / `schema_set_account` auto-flip `external_email_acceptance` to `accept_valid_typed_email`; `schema_remove_*` reset to `screen_unknown_senders`. The `schema_acceptance_*` methods only override that default.
-  - Bodies with newlines must use `body_file` (or `payload_file` for typed inboxes); inline shell quoting loses `\n`.
-
-  **Tests:** `tests/clankmates_client/test_host_ops.py` (new) using a fake `runner`. Cover each new method, schema-payload encoding (`--schema` vs `--schema-file`), account-vs-channel subcommand selection, body/payload mutex enforcement on `send`/`reply`, error response shapes. Reuse fixture patterns from `test_subprocess.py`.
-
-  **No new module file** — all additions land in `subprocess.py`. Update `__init__.py` re-exports if needed. ARCH_clankmates_client.md needs the new method table appended.
-
-  Run toolkit regression.
+**Plan:** `CLANKMATES_CLIENT_PLAN.md`
 
 ## Phase 3: Structured LLM — Extract from Diplomat
 

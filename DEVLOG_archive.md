@@ -273,3 +273,11 @@ the built-in Anthropic pricing table from the architecture contract. Created
 `src/toolkit/cost_accountant/errors.py` with the budget, abort, and unknown
 model exception hierarchy. Used `typing.Optional`, `Dict`, and `List` so the
 new module remains compatible with the project Python 3.9 floor.
+
+## 2026-06-11 — Clankmates Client Phase 4 archive summary
+
+**Module:** Clankmates Client | **Phase:** 4 | **Result:** Closed
+
+Archived the phase 4 close record after the host-side ops expansion and review
+cleanup. The phase shipped the vendored subprocess wrapper plus the generic
+decode, cursor, and screen helpers, and closed at 88/88 tests passing.
