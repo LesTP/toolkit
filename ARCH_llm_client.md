@@ -117,6 +117,16 @@ OpenAI's reasoning-family models (`gpt-5*`, `o1*`, `o3*`, `o4*`) reject the lega
 
 If OpenAI introduces another prefix that requires `max_completion_tokens`, extend the prefix tuple in `OpenAIProvider.call()`. No changes needed in `LLMProvider`, `create_provider`, or consumers.
 
+### Reasoning-content fallback (OpenRouterProvider)
+
+Several reasoning models routed via OpenRouter (`deepseek/deepseek-r1`, `deepseek/deepseek-r1-distill-llama-70b`, `qwen/qwen3-*`, and likely others) return their answer in the response's `reasoning` or `reasoning_content` field with the standard `content` field empty or `None`. OpenAI's own o-series via OpenRouter's OpenAI passthrough does NOT have this issue — only non-OpenAI backends.
+
+`OpenRouterProvider.call()` falls back to `reasoning` / `reasoning_content` when `content` is empty, before raising `LLMResponseError`. This prevents `complete_with_retry`'s `retry_on_empty=True` default from silently retrying empty-content responses indefinitely (the failure mode that hung Diplomat Run 17's R1 cells for an hour).
+
+**Caveat for consumers.** When the fallback fires, `LLMResponse.content` is the model's thinking text (which the model would otherwise wrap in `<think>...</think>` tags). Downstream JSON parsers / `structured_call` extractors should tolerate first-person reasoning prose ("Okay, let me think about this..."). Content takes precedence when populated, so non-reasoning models and OpenAI-backed reasoning models are unaffected.
+
+Contract pinned by three tests in `TestOpenRouterProvider`: `test_empty_content_falls_back_to_reasoning_field`, `test_empty_content_falls_back_to_reasoning_content_field`, `test_content_takes_precedence_over_reasoning`.
+
 ## Outputs
 
 ```python

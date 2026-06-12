@@ -301,13 +301,33 @@ class OpenRouterProvider(OpenAIProvider):
             raise LLMAPIError(str(e)) from e
 
         choice = response.choices[0] if response.choices else None
-        if not choice or not choice.message or not choice.message.content\
-                or not choice.message.content.strip():
+        if not choice or not choice.message:
+            raise LLMResponseError("Empty response content from OpenRouter API")
+
+        # Prefer content; fall back to reasoning fields for models (e.g.,
+        # DeepSeek R1, DeepSeek R1-distill, Qwen3, OpenRouter o1/o3/o4
+        # routes via non-OpenAI backends) that return their answer in
+        # `reasoning_content` / `reasoning` instead of `content`. Some
+        # OpenRouter backends for reasoning models populate ONLY the
+        # reasoning field, leaving content empty — without this fallback
+        # the empty-content guard plus complete_with_retry's
+        # retry_on_empty default produces a silent infinite-retry hang.
+        # Note: when this fallback fires, the returned content is the
+        # model's thinking, not a synthesized final answer. Downstream
+        # parsers (structured_call, JSON extractors) may need to be
+        # tolerant of think-step prose.
+        content = choice.message.content
+        if not content or not content.strip():
+            content = (
+                getattr(choice.message, "reasoning", None)
+                or getattr(choice.message, "reasoning_content", None)
+            )
+        if not content or not content.strip():
             raise LLMResponseError("Empty response content from OpenRouter API")
 
         usage = response.usage
         return LLMResponse(
-            content=choice.message.content,
+            content=content,
             model=response.model,
             provider="openrouter",
             token_usage=TokenUsage(

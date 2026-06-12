@@ -255,3 +255,37 @@ Diplomat is the source-of-extraction project for two toolkit modules; Clanker Co
 | `edit_classifier` | 2026-06-07 (Phase 33 follow-up) | Consumes from `toolkit.edit_classifier`; project-side `build_edit_classifier(...)` factory + prompt file stay in diplomat | Incoming (PROJECT.md describes operator coaching surface mirroring Diplomat's `coached_game.py` pattern) |
 
 **Pattern.** Toolkit holds only the config-agnostic primitive (parser / classifier class + types + schema + constants). Each consumer keeps a thin project-side `build_*` factory that reads its own config-file shape and constructs the primitive. Categories / tag vocabularies are hardcoded for v1; parameterise only when a third consumer needs a different list.
+
+## OpenRouter reasoning-model content fallback (2026-06-12)
+
+**Change.** `OpenRouterProvider.call` now falls back to the response's `reasoning` / `reasoning_content` field when `content` is empty or None. Prior behavior was to raise `LLMResponseError("Empty response content from OpenRouter API")`, which `complete_with_retry`'s `retry_on_empty=True` default would silently retry indefinitely — producing process hangs with no error surface.
+
+**Why.** Diplomat Run 17 hit this issue with `deepseek/deepseek-r1`. Probing OpenRouter directly confirmed the empty-content behavior is systemic across reasoning models, not R1-specific:
+
+| Model | Backend (probed) | content | reasoning |
+|---|---|---|---|
+| `deepseek/deepseek-r1` | Azure | `None` | populated |
+| `deepseek/deepseek-r1-distill-llama-70b` | Novita | `None` | populated |
+| `qwen/qwen3-32b` | DeepInfra | `None` | populated |
+| `openai/o4-mini` | OpenAI | populated | None |
+| `deepseek/deepseek-chat` | StreamLake | populated | N/A |
+| `meta-llama/llama-3.3-70b-instruct` | Parasail | populated | N/A |
+
+OpenAI's own reasoning models (`o4-mini` via OpenAI's backend) merge thinking into `content` server-side. Non-OpenAI reasoning backends on OpenRouter expose the two channels separately and leave `content` empty unless the caller opts in (e.g., `extra_body={"include_reasoning": True}`). The fallback unblocks all reasoning models without requiring per-model opt-in plumbing.
+
+**Behavioral caveats for consumers.**
+- When the fallback fires, `LLMResponse.content` contains the model's thinking, not a synthesized final answer. Reasoning text may include first-person think-prose ("Okay, let me consider...") that downstream JSON parsers / structured_call extractors must tolerate.
+- `content` still takes precedence when populated — no behavior change for non-reasoning models or OpenAI-routed reasoning models.
+- Empty content AND empty reasoning still raises `LLMResponseError` (preserves the original safety check; just narrows what counts as "empty").
+
+**Downstream impact.**
+- **Diplomat (Run 17+):** R1 cells now produce content; the toolkit patch is the prerequisite. Run 17 was unblocked.
+- **Other consumers:** No change unless they use OpenRouter with reasoning models. `OpenAIProvider` (direct OpenAI API) unaffected. `AnthropicProvider` / `GeminiProvider` unaffected.
+- **Cost-accountant:** No change. Token usage still tracked from `usage.completion_tokens` (reasoning tokens are counted as output by OpenRouter — already reflected in the upstream `usage` block).
+
+**Test coverage.** `toolkit/tests/llm_client/test_core.py` `TestOpenRouterProvider` added three tests:
+- `test_empty_content_falls_back_to_reasoning_field`
+- `test_empty_content_falls_back_to_reasoning_content_field`
+- `test_content_takes_precedence_over_reasoning`
+
+All existing tests (61 of 64) continue to pass unchanged.

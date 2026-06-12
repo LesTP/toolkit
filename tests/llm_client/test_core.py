@@ -931,3 +931,90 @@ class TestOpenRouterProvider:
                 user_prompt="u",
                 max_tokens=50,
             )
+
+    def test_empty_content_falls_back_to_reasoning_field(self):
+        """DeepSeek R1 + similar reasoning models on some OpenRouter backends
+        return their answer in the 'reasoning' field with content empty/None.
+        The provider falls back to reasoning rather than raising — without
+        this, complete_with_retry's retry_on_empty default produces a silent
+        infinite-retry hang."""
+        from types import SimpleNamespace
+
+        provider, _ = self._make_provider()
+
+        def fake_create(**kwargs):
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(
+                    content=None,
+                    reasoning="The user asked me to say hello, so: hello",
+                ))],
+                usage=SimpleNamespace(prompt_tokens=10, completion_tokens=50),
+                model="deepseek/deepseek-r1",
+            )
+
+        provider._client.chat.completions.create = fake_create
+
+        response = provider.call(
+            model="deepseek/deepseek-r1",
+            system_prompt="s",
+            user_prompt="u",
+            max_tokens=200,
+        )
+        assert isinstance(response, LLMResponse)
+        assert "hello" in response.content
+        assert response.model == "deepseek/deepseek-r1"
+        assert response.provider == "openrouter"
+
+    def test_empty_content_falls_back_to_reasoning_content_field(self):
+        """Some reasoning-model backends use 'reasoning_content' instead of
+        'reasoning'. The provider checks both."""
+        from types import SimpleNamespace
+
+        provider, _ = self._make_provider()
+
+        def fake_create(**kwargs):
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(
+                    content="",
+                    reasoning_content="reasoning_content variant answer",
+                ))],
+                usage=SimpleNamespace(prompt_tokens=10, completion_tokens=50),
+                model="deepseek/deepseek-r1-distill-llama-70b",
+            )
+
+        provider._client.chat.completions.create = fake_create
+
+        response = provider.call(
+            model="deepseek/deepseek-r1-distill-llama-70b",
+            system_prompt="s",
+            user_prompt="u",
+            max_tokens=200,
+        )
+        assert response.content == "reasoning_content variant answer"
+
+    def test_content_takes_precedence_over_reasoning(self):
+        """If both content and reasoning are populated, content wins —
+        the fallback only fires when content is empty/None."""
+        from types import SimpleNamespace
+
+        provider, _ = self._make_provider()
+
+        def fake_create(**kwargs):
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(
+                    content="actual answer",
+                    reasoning="internal thinking that should be ignored",
+                ))],
+                usage=SimpleNamespace(prompt_tokens=5, completion_tokens=3),
+                model="deepseek/deepseek-r1",
+            )
+
+        provider._client.chat.completions.create = fake_create
+
+        response = provider.call(
+            model="deepseek/deepseek-r1",
+            system_prompt="s",
+            user_prompt="u",
+            max_tokens=100,
+        )
+        assert response.content == "actual answer"
