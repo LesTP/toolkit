@@ -186,14 +186,21 @@ class OpenAIProvider(LLMProvider):
         max_tokens: int,
         temperature: float = 0.7,
     ) -> LLMResponse:
-        # Reasoning-family models (gpt-5.x, o1/o3/o4) require
-        # `max_completion_tokens`; legacy gpt-4.x / gpt-3.5 still accept
-        # `max_tokens`. Pick the right param name by model prefix.
+        # Reasoning-family models (gpt-5.x, o1/o3/o4) differ from legacy
+        # gpt-4.x / gpt-3.5 in two ways, both keyed off the model-name prefix:
+        #   1. they require `max_completion_tokens` (not `max_tokens`);
+        #   2. they reject any explicit `temperature` other than the API
+        #      default of 1 — sending 0.7 returns a 400.
+        # For these models we use the completion-token param and omit
+        # `temperature` entirely (the API then applies its default of 1). All
+        # other models keep the legacy behavior, so this is backwards-compatible.
         model_lower = model.lower()
         if model_lower.startswith(("gpt-5", "o1", "o3", "o4")):
             token_kwarg = {"max_completion_tokens": max_tokens}
+            temperature_kwarg: dict = {}
         else:
             token_kwarg = {"max_tokens": max_tokens}
+            temperature_kwarg = {"temperature": temperature}
         try:
             response = self._client.chat.completions.create(
                 model=model,
@@ -201,7 +208,7 @@ class OpenAIProvider(LLMProvider):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                temperature=temperature,
+                **temperature_kwarg,
                 **token_kwarg,
             )
         except self._openai.RateLimitError as e:

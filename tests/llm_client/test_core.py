@@ -769,6 +769,39 @@ class TestOpenAIProviderTokenParam:
         assert captured.get("max_tokens") == 2048
         assert "max_completion_tokens" not in captured
 
+    @pytest.mark.parametrize(
+        "model",
+        ["gpt-5-mini", "gpt-5.4-mini", "gpt-5.5", "o1", "o1-mini", "o3-mini", "o4-mini"],
+    )
+    def test_reasoning_models_omit_temperature(self, model):
+        # Reasoning-family models only accept the default temperature (1);
+        # sending an explicit value (e.g. the 0.7 default) returns a 400, so
+        # the provider must omit the param entirely.
+        provider, captured = self._provider_with_recorder()
+        provider.call(
+            model=model,
+            system_prompt="sys",
+            user_prompt="usr",
+            max_tokens=2048,
+            temperature=0.7,
+        )
+        assert "temperature" not in captured
+
+    @pytest.mark.parametrize(
+        "model",
+        ["gpt-4.1-mini", "gpt-4o", "gpt-4", "gpt-3.5-turbo"],
+    )
+    def test_legacy_models_pass_temperature(self, model):
+        provider, captured = self._provider_with_recorder()
+        provider.call(
+            model=model,
+            system_prompt="sys",
+            user_prompt="usr",
+            max_tokens=2048,
+            temperature=0.3,
+        )
+        assert captured.get("temperature") == 0.3
+
 
 # ---------------------------------------------------------------------------
 # OpenRouterProvider
