@@ -1,11 +1,13 @@
 {
   "schema_version": 1,
   "phase": 5,
-  "state": "plan",
+  "state": "close",
   "gotchas": [
     "**Running tests:** Use `/home/claude/toolkit-venv/bin/python3 -m pytest` (not bare `pytest` or `python3 -m pytest` — those hit system Python which has no pytest). The venv is inside the container at `/home/claude/toolkit-venv/`.",
     "**PYTHONPATH:** When running tests, set `PYTHONPATH=/home/claude/workspace/toolkit/src` so pytest can find the `toolkit` package, or use `cd /home/claude/workspace/toolkit && /home/claude/toolkit-venv/bin/python3 -m pytest`.",
-    "**jsonschema missing from venv:** The toolkit venv is read-only. To test `structured_llm`: `pip install --target=/tmp/toolkit-deps jsonschema` then `PYTHONPATH=/home/claude/workspace/toolkit/src:/tmp/toolkit-deps pytest tests/structured_llm/`."
+    "**jsonschema missing from venv:** The toolkit venv is read-only. To test `structured_llm`: `pip install --target=/tmp/toolkit-deps jsonschema` then `PYTHONPATH=/home/claude/workspace/toolkit/src:/tmp/toolkit-deps pytest tests/structured_llm/`.",
+    "structured_call json_mode propagation: use dataclasses.replace for LLMConfig instances, not dict(**config) — dataclasses reject extra keyword args and dict() silently drops fields",
+    "Anthropic has no response_format API for JSON mode — use assistant prefill (seed with '{') to steer JSON output; document this asymmetry vs OpenAI/Gemini"
   ],
   "budget_type": "steps"
 }

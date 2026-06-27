@@ -3,35 +3,40 @@
     "phase": 5,
     "step": 1,
     "title": "Add json_mode to LLMConfig and thread through complete() to provider call()",
-    "status": "pending",
-    "notes": "Add json_mode: bool = False to LLMConfig. Add json_mode=False param to each provider call() signature. complete() reads config.json_mode and passes to provider. complete_with_retry() delegates through complete() so no change needed there. Unit tests: flag reaches provider layer when set; default path is unchanged; existing LLMConfig construction still works without json_mode arg."
+    "status": "complete",
+    "notes": "Add json_mode: bool = False to LLMConfig. Add json_mode=False param to each provider call() signature. complete() reads config.json_mode and passes to provider. complete_with_retry() delegates through complete() so no change needed there. Unit tests: flag reaches provider layer when set; default path is unchanged; existing LLMConfig construction still works without json_mode arg.",
+    "commit": "6f9905b"
   },
   {
     "phase": 5,
     "step": 2,
     "title": "OpenAI + OpenRouter providers: emit response_format json_object when json_mode",
-    "status": "pending",
-    "notes": "OpenAIProvider.call(): when json_mode=True, add response_format={type: json_object} to create() kwargs; also ensure the literal word json appears somewhere in the system or user prompt (OpenAI API requirement). OpenRouterProvider.call(): same treatment in its own call() override. Unit tests: response_format present when on, absent when off; both providers tested independently."
+    "status": "complete",
+    "notes": "OpenAIProvider.call(): when json_mode=True, add response_format={type: json_object} to create() kwargs; also ensure the literal word json appears somewhere in the system or user prompt (OpenAI API requirement). OpenRouterProvider.call(): same treatment in its own call() override. Unit tests: response_format present when on, absent when off; both providers tested independently.",
+    "commit": "e5ecc32"
   },
   {
     "phase": 5,
     "step": 3,
     "title": "Gemini provider: emit response_mime_type application/json when json_mode",
-    "status": "pending",
-    "notes": "GeminiProvider.call(): when json_mode=True, add response_mime_type=application/json to GenerateContentConfig. Unit tests: field present in config when on, absent (not passed) when off."
+    "status": "complete",
+    "notes": "GeminiProvider.call(): when json_mode=True, add response_mime_type=application/json to GenerateContentConfig. Unit tests: field present in config when on, absent (not passed) when off.",
+    "commit": "5b1fb2b"
   },
   {
     "phase": 5,
     "step": 4,
     "title": "Anthropic provider: assistant prefill when json_mode; document asymmetry",
-    "status": "pending",
-    "notes": "AnthropicProvider.call(): when json_mode=True, append assistant prefill {role: assistant, content: {} to messages before calling messages.create. No response_format kwarg exists in Anthropic API. Add docstring comment documenting the asymmetry (prefill vs. API-native for other providers). Unit tests: no response_format in create() call; prefill message present when on; existing behavior unchanged when off."
+    "status": "complete",
+    "notes": "AnthropicProvider.call(): when json_mode=True, append assistant prefill {role: assistant, content: {} to messages before calling messages.create. No response_format kwarg exists in Anthropic API. Add docstring comment documenting the asymmetry (prefill vs. API-native for other providers). Unit tests: no response_format in create() call; prefill message present when on; existing behavior unchanged when off.",
+    "commit": "65303bb"
   },
   {
     "phase": 5,
     "step": 5,
     "title": "structured_call gains json_mode param; propagates to config; ARCH update + back-compat sweep",
-    "status": "pending",
-    "notes": "structured_call signature gains json_mode: bool = False. When json_mode=True: if config is a dataclass use dataclasses.replace(config, json_mode=True); if dict use {**config, json_mode: True}. Update ARCH_structured_llm.md Public API section and Change History. Confirm all existing callers in diplomat/phosphene/codexbot pass no json_mode arg (flag is default-off). Confirm existing structured_llm tests still pass unmodified."
+    "status": "complete",
+    "notes": "structured_call signature gains json_mode: bool = False. When json_mode=True: if config is a dataclass use dataclasses.replace(config, json_mode=True); if dict use {**config, json_mode: True}. Update ARCH_structured_llm.md Public API section and Change History. Confirm all existing callers in diplomat/phosphene/codexbot pass no json_mode arg (flag is default-off). Confirm existing structured_llm tests still pass unmodified.",
+    "commit": "80675f6"
   }
 ]
