@@ -232,6 +232,51 @@ def test_structured_call_success_on_first_attempt():
     asyncio.run(_run())
 
 
+def test_structured_call_leaves_config_unchanged_when_json_mode_off():
+    async def _run():
+        client = SyncFakeClient('{"status": "ok"}')
+        config = {"temperature": 0.2}
+
+        result = await structured_call(
+            client,
+            config,
+            "commodity",
+            schema=SIMPLE_SCHEMA,
+            system_prompt="Return JSON.",
+            user_prompt="What is the status?",
+        )
+
+        assert result.success
+        assert client.calls[0]["config"] is config
+        assert "json_mode" not in client.calls[0]["config"]
+        assert config == {"temperature": 0.2}
+
+    asyncio.run(_run())
+
+
+def test_structured_call_adds_json_mode_to_config_when_enabled():
+    async def _run():
+        client = SyncFakeClient('{"status": "ok"}')
+        config = {"temperature": 0.2}
+
+        result = await structured_call(
+            client,
+            config,
+            "commodity",
+            schema=SIMPLE_SCHEMA,
+            system_prompt="Return JSON.",
+            user_prompt="What is the status?",
+            json_mode=True,
+        )
+
+        assert result.success
+        assert client.calls[0]["config"] is not config
+        assert client.calls[0]["config"]["json_mode"] is True
+        assert config == {"temperature": 0.2}
+
+    asyncio.run(_run())
+
+
 def test_structured_call_retries_on_validation_failure():
     async def _run():
         client = SequentialFakeClient([

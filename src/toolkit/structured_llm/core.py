@@ -50,6 +50,7 @@ async def structured_call(
     user_prompt: str,
     examples: list[Example] | list[dict[str, Any]] | None = None,
     max_retries: int = 1,
+    json_mode: bool = False,
     attribution: str | None = None,
     purpose: str | None = None,
 ) -> StructuredResult:
@@ -78,6 +79,9 @@ async def structured_call(
         "input" and "output" keys.
     max_retries : int
         Number of retry attempts on validation failure (default 1).
+    json_mode : bool
+        When True, request provider-native JSON output by annotating the
+        config passed to the injected client with ``json_mode=True``.
 
     Returns
     -------
@@ -87,6 +91,11 @@ async def structured_call(
     """
     normalized_examples = _normalize_examples(examples)
     full_system = _assemble_system_prompt(system_prompt, schema, normalized_examples)
+
+    call_config = config
+    if json_mode:
+        call_config = dict(config)
+        call_config["json_mode"] = True
 
     messages: list[dict[str, str]] = [
         {"role": "system", "content": full_system},
@@ -100,7 +109,7 @@ async def structured_call(
         try:
             raw = await _call_llm(
                 llm_client,
-                config,
+                call_config,
                 tier,
                 messages,
                 attribution=attribution,
