@@ -1,0 +1,18 @@
+# i2c project configuration — Toolkit.
+#
+# Defaults for `i2c run`. Precedence: CLI flag > this file > built-in default.
+# Secrets / API keys do NOT belong here — configure those via environment
+# variables (e.g. $I2C_TELEGRAM_TOKEN for the Telegram surface).
+
+[run]
+backend = "claude"
+model = "sonnet"
+max_budget_usd = 5.00
+
+# Telegram surface (`i2c serve telegram`). The bot token comes from
+# $I2C_TELEGRAM_TOKEN (environment only). Fill admin_ids with the Telegram
+# user IDs allowed to issue mutating commands (/run, /batch, /clearboundary)
+# before serving, then uncomment this table.
+# [telegram]
+# root = "p:/shared"      # portfolio root the bot scans for projects
+# admin_ids = []          # e.g. [123456789]

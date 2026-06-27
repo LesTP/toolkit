@@ -5,6 +5,12 @@ state: plan
 steps_remaining: 0
 ---
 
+> **MIGRATED TO i2c (2026-06-26).** This project now runs on installed i2c with
+> state in `.state/`. **Do NOT run `run-iteration.sh` / the e2e bash loop** — it
+> reads/writes this file's frontmatter and would diverge from `.state/`. Drive
+> the project with `i2c run` or the Telegram bot. This DEVPLAN is a frozen
+> pre-migration snapshot, kept for history.
+
 # Toolkit — Dev Plan
 
 ## Cold Start

@@ -1,133 +1,166 @@
 # Codex Worker Adapter — Toolkit
 
-> **Contract:** Follow `WORKER_SPEC.md` for iteration lifecycle, allowed actions,
-> one-action rule, escalation conditions, and output contract. This file covers
-> Codex-specific mechanics only.
+> **Contract:** Backend-specific mechanics for Codex workers. The universal
+> loop contract (identity, main loop, escalation, output contract,
+> prohibitions) lives in `WORKER_SPEC.md` and arrives in your prompt
+> pre-assembled — you do not read it. Action procedures live in
+> `instructions/$ACTION.md` and also arrive pre-assembled. This adapter
+> covers what is **Codex-specific** plus what is **project-specific**.
 
 ## Framework
-This project follows the e2e governance framework (see `GOVERNANCE.md`, symlinked from `../e2e/`).
 
-## Required Reading — Every Iteration
-
-You do not have `@`-reference loading. You must explicitly read these files at
-the start of every iteration before taking any action.
-
-**CRITICAL: Minimize tool calls.** Each tool call round-trips through the full
-context window. Combine reads into as few shell commands as possible.
-
-### Tier 1 — Always (mandatory, every iteration)
-
-Read this file, WORKER_SPEC.md, and DEVPLAN.md in a **single command**:
-
-```bash
-cat CODEX.md && echo '---SPLIT---' && cat WORKER_SPEC.md && echo '---SPLIT---' && cat DEVPLAN.md
-```
-
-**DEVLOG.md:** Append new entries at the bottom (newest last). During phase close, archive the previous phase's entries to `DEVLOG_archive.md`. (Toolkit's existing DEVLOG currently has newest entries at top — realign during the next phase close.)
-
-### Tier 2 — Current module (mandatory for step/review/complete actions)
-
-After determining the active module from DEVPLAN's Current Status, read the
-relevant ARCH file. Combine with source files in the **same command**:
-
-```bash
-cat ARCH_<module>.md && echo '---SPLIT---' && cat src/toolkit/<module>/types.py && echo '---SPLIT---' && cat src/toolkit/<module>/core.py
-```
-
-| Module | ARCH file | Source dir | Tests dir |
-|--------|-----------|------------|-----------|
-| embedding | `ARCH_embedding.md` | `src/toolkit/embedding/` | `tests/embedding/` |
-| clustering | `ARCH_clustering.md` | `src/toolkit/clustering/` | `tests/clustering/` |
-| llm_client | `ARCH_llm_client.md` | `src/toolkit/llm_client/` | `tests/llm_client/` |
-| telegram_client | `ARCH_telegram_client.md` | `src/toolkit/telegram_client/` | (none yet) |
-| json_rpc | `ARCH_json_rpc.md` | `src/toolkit/json_rpc/` | `tests/json_rpc/` |
-| cost_accountant | `ARCH_cost_accountant.md` | `src/toolkit/cost_accountant/` (to create) | `tests/cost_accountant/` (to create) |
-
-### Tier 3 — On demand (read only when needed)
-- `PROJECT.md` — only during Phase Plan actions
-- `ARCHITECTURE.md` — only during Phase Plan or cross-module wiring
-- `GOVERNANCE.md` — only if unsure about process
-
-### Read efficiency rules
-- **Combine related reads** into one `cat A && echo '---' && cat B` command
-- **Never read one file per tool call** when you need multiple files
-- **Combine source + test reads:** `cat src/toolkit/<module>/core.py && echo '---' && cat tests/<module>/test_core.py`
-- **Fresh reads before edits** — re-read immediately before editing, not at iteration start
+i2c. State lives in `.state/*.json`; you never read or write governance files
+directly — everything you need arrives pre-assembled in your prompt, and you
+write outcomes back through `i2c state`.
 
 ## Available Modules
 
-**Track — Standalone modules** (no inter-toolkit dependencies):
-- **embedding** — text → vector embeddings with caching (complete, 43 tests)
-- **clustering** — semantic grouping over embeddings; HDBSCAN + RAPTOR strategies (complete, 48 tests)
-- **llm_client** — provider-agnostic LLM API abstraction with model tiers and rate limits (complete)
-- **telegram_client** — Telegram Bot API messaging (complete)
-- **json_rpc** — async JSON-RPC 2.0 over stdio (complete)
+Toolkit is a library of independent modules consumed by application projects
+(Year-in-Search, Phosphene, TGBot, Codexbot, Diplomat, Clanker Courts). All
+modules are complete.
 
-**Track — Wrapper modules** (one approved cross-toolkit dependency):
-- **cost_accountant** — wraps `llm_client` with pre-call budget enforcement, JSONL ledger, session reporting (active — Phase 1 not started, ARCH spec written)
+**Leaf modules** (no toolkit dependencies):
+- `embedding` — text → vector embeddings with caching
+- `clustering` — semantic grouping over embeddings; HDBSCAN + RAPTOR strategies
+- `llm_client` — provider-agnostic LLM API; model tiers, rate limits, rotation
+- `telegram_client` — Telegram Bot API send/receive/edit, MarkdownV2, splitting
+- `json_rpc` — async JSON-RPC 2.0 over stdio
+- `prompt_regression` — scenario-based prompt regression with LLM-as-judge
+  (injected LLM client protocol)
+- `structured_llm` — LLM JSON extraction + schema validation (injected client)
+- `source_ingestion` — RSS / Telegram channel / Reddit / human-share / corpus
+  importers → uniform `ContentItem`
+- `feedback_collector` — normalizes platform feedback signals to a duck-typed
+  memory store
+- `coaching` — tag-based operator-input parser; YAML routes + slash-command
+  vocabulary
+- `clankmates_client` — subprocess wrapper around the `clankm` CLI + message
+  decoders, thread-cursor store, peer-DM screener
+
+**Composing modules** (one approved cross-module dependency each):
+- `cost_accountant` → `llm_client` — budget enforcement, JSONL ledger, reporting
+- `gateway` → `telegram_client` (optional, runtime import) — multi-platform
+  message bus
+- `edit_classifier` → `structured_llm` — LLM-as-judge edit-log categorizer
 
 ## Project-Specific Notes
 
 - **Language:** Python 3.9+
-- **Packaging:** Single `pyproject.toml`; modules live under `src/toolkit/<module>/`
-- **Module independence:** No imports between toolkit modules. The single exception is `cost_accountant → llm_client`. Do not introduce new cross-module imports without ESCALATE.
-- **Typed boundaries:** Each module exposes typed dataclasses in `types.py`. Public API via `__init__.py`.
-- **Tests:** `pytest`. Run from project root: `pytest tests/<module>/`.
-- **Lazy imports for heavy deps:** `hdbscan`, `umap`, `sentence_transformers` are imported inside functions, not at module top.
+- **Packaging:** single `pyproject.toml`; modules live under
+  `src/toolkit/<module>/`.
+- **Module independence:** no imports between toolkit modules except the three
+  documented exceptions above (`cost_accountant → llm_client`, `gateway →
+  telegram_client` optional, `edit_classifier → structured_llm`). Do not
+  introduce a new cross-module import without ESCALATE.
+- **Typed boundaries:** each module exposes typed dataclasses in `types.py`;
+  public API via `__init__.py`.
+- **Tests:** `pytest`, run from the project root: `pytest tests/<module>/`.
+  (Environment-specific test gotchas — venv path, `PYTHONPATH`, missing
+  `jsonschema` — arrive pre-assembled in `project.json.gotchas`; don't
+  duplicate them here.)
+- **Lazy imports for heavy deps:** `hdbscan`, `umap`, `sentence_transformers`
+  are imported inside functions, not at module top.
+- **Provenance:** several modules were adapted from TGBot / codexbot / Diplomat
+  / Phosphene. Retain tested patterns; do not rewrite for style.
 
 ## Codex-Specific Tool Rules
-- **No `@` references.** Read files explicitly using CLI. When a file contains `@FILENAME` references, treat them as file paths to read.
-- **Minimize tool calls.** Every tool call re-processes the full context. Combine multiple file reads, greps, and short commands into single shell invocations.
-- **Command files shared with Claude.** Action procedures live in `.claude/commands/*.md`. Read these files and follow their instructions the same way Claude does — the content is backend-agnostic.
-- **Fresh reads before edits.** Before editing any file (especially DEVPLAN.md), read it immediately before the edit — not at the start of the iteration.
-- **Shell usage.** Use CLI tools directly for builds, tests, git operations, file discovery, and search.
-- **Search tool availability.** This loop environment may not have `rg` installed. Before using `rg`, check availability with `command -v rg`. If absent, use portable fallbacks: `find` for file discovery, `grep -RIn` for text search, `sed -n` for bounded file reads.
 
-## Action Instructions
+- **No `@`-reference loading.** Read files explicitly using shell commands.
+  When prose contains `@FILENAME` markers, treat them as file paths to read
+  with `cat` or `sed -n`.
+- **Minimize tool calls.** Every tool call re-processes the full context.
+  Combine multiple file reads, greps, and short commands into single shell
+  invocations.
+  - Bad: `cat A.py` then `cat B.py` (two tool calls).
+  - Good: `cat A.py && echo '---' && cat B.py` (one tool call).
+  - Bad: `grep foo A` then `grep foo B`.
+  - Good: `grep -n foo A B`.
+- **Search-tool fallback.** This loop environment may not have `rg`
+  installed. Before using `rg`, check availability with `command -v rg`. If
+  it is absent, fall back to portable equivalents: `find` for file
+  discovery, `grep -RIn` for text search, `sed -n` for bounded file reads.
+  Do not repeatedly retry `rg` after it has failed in the same iteration.
+- **Fresh reads before edits.** Before editing any source or test file,
+  re-read it immediately — not at the start of the iteration. Governance
+  arrived fresh in your prompt; this rule applies to source files only.
+- **Non-interactive shell only.** The loop has no stdin. Commands that
+  open editors (`vim`, `nano`, `git commit` without `-m`,
+  `git rebase -i`), prompt for input (`read`, `sudo` without `-n`,
+  `ssh` without `-o BatchMode=yes`), or pipe through pagers (`less`,
+  `more`, `git log` without `--no-pager`) will hang. To stage part of
+  a file, split into discrete edits or use `git restore` to revert
+  unwanted parts before `git add`. `git add -p` is interactive-only.
+- **State writes go through `i2c state`.** Never use `sed`, `echo >`, or
+  direct file edits on `.state/` files. The CLI guarantees atomic,
+  schema-validated writes.
+- **Use `i2c state --from-file` for multi-line or `$`-laden payloads.**
+  Write the JSON to a temp file and pass `--from-file <path>`; bypasses
+  shell quoting entirely. Inline-quoting works for short one-line JSON
+  without `$` or newlines.
 
-WORKER_SPEC.md defines four allowed actions. Here is how to execute each in
-Codex. Perform **exactly one** per iteration unless `steps_remaining` > 0
-(see WORKER_SPEC.md §4 for multi-step budget).
+## Turn Health Check (Codex-specific safety)
 
-### Phase Plan
-**When:** No active phase for the current module.
-1. Read `.claude/commands/phase-plan.md` and follow its instructions.
-2. Commit with message: `phase-plan: <module>.<phase> — <summary>`.
-3. Emit exit signal and stop (or continue to first step if steps_remaining > 0).
+This is a **safety circuit breaker**, separate from the step budget. The
+runner provides `ITERATION_JSONL` in the prompt's environment when
+applicable. After each completed action, check the turn count:
 
-### Step Execution
-**When:** A phase is in progress with remaining steps.
-1. Pick the next step from DEVPLAN. Do all file read/write work.
-2. Run builds, tests, and git operations as needed.
-3. Read `.claude/commands/step-done.md` and follow its instructions.
-4. Emit exit signal and stop. Do **not** start the next step unless `steps_remaining > 0`.
+```bash
+grep -c '"item.completed"' "$ITERATION_JSONL"
+```
 
-### Phase Review
-**When:** All steps in the current phase are complete.
-1. Read `.claude/commands/phase-review.md` and follow its instructions.
-2. Emit exit signal and stop.
+If `total_turns > actions_performed * 50`, emit the exit signal with `EXIT 2`
+and reason `"turn health check exceeded"`. Do **not** continue.
 
-### Phase Complete
-**When:** Review is done and fixes (if any) are applied.
-1. Read `.claude/commands/phase-complete.md` and follow its instructions.
-2. Emit exit signal and stop.
+(`actions_performed` here is the worker's internal count of actions taken in
+this invocation — typically 1 for EXECUTE/REVIEW/CLOSE — not a field in the
+emitted signal.)
+
+Calibration notes (apply judgment, not just the formula):
+
+- The 50-turns-per-step ceiling is calibrated for single-repo work where
+  the worker mostly reads, edits, and tests within one project directory.
+- **Cross-repo work** (e.g., a step that edits both this project and a
+  consumer repo) legitimately needs more tool calls. If you trip the ceiling
+  during a clearly-cross-repo step, log the exit and note the cause in the
+  devlog `summary` so the orchestrator can decide whether to relax the
+  threshold for future cross-repo phases.
+- The check is a circuit breaker, not the budgeting mechanism. The step
+  budget (`steps_remaining` in `project.json`) is what counts work; this
+  is just the safety net against runaway tool churn.
+
+## Runner Info
+
+**Runner:** `i2c run --backend codex` invokes `codex exec` per iteration with
+the assembled prompt on stdin and logs to `logs/loop/`. The runner ships an
+iteration-specific JSONL log path in the prompt when relevant; that path is the
+input to the turn-health check above.
 
 ## Output Contract
 
-End every iteration with exactly these five lines — no additional text after:
+End every invocation with exactly these two lines — no additional text after:
 
 ```
-EXIT: 0 | 1 | 2
+EXIT: 0 | 2
 REASON: <one-line summary>
-ACTION_TYPE: PLAN | EXECUTE | REVIEW | CLOSE
-ACTION_ID: <phase.step>
-STEPS_COMPLETED: <number of actions performed in this invocation>
 ```
 
-## Autonomy
+| Code | Meaning |
+|------|---------|
+| 0 | Normal completion — runner reads `.state/project.json` to decide next dispatch |
+| 2 | Error — judgment-based escalation or health check tripped |
 
-When invoked in autonomous mode, execute the action and emit the exit signal
-without waiting for human input. In supervised mode, surface proposed changes
-for approval before committing.
+The runner's parser uses line-anchored regexes. The block can be plain or inside a fenced code block; both work. **Do not omit it** — prose-only output causes the runner to report `exit=2 "signal missing or malformed"` even when the work landed correctly in `.state/` and the commit. Everything else the runner needs (action, phase, step, status) it reads from `.state/project.json` and from what it dispatched.
 
-See WORKER_SPEC.md §8 for full mode definitions.
+## Mode
+
+Mode (autonomous vs. supervised) is set by the runner via the assembler's
+`--mode` flag. The assembled prompt's framing reflects the active mode:
+
+- **Autonomous** (default): apply fixes, commit, transition state, emit the
+  exit signal without waiting for input.
+- **Supervised** (`--mode supervised`): the assembled instructions include
+  pause-for-approval framing; surface proposed changes before committing.
+
+You do not choose the mode. If the framing in your prompt is ambiguous,
+default to autonomous behavior and note the ambiguity in the devlog
+`summary`.
