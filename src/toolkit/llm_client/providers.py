@@ -21,6 +21,13 @@ from toolkit.llm_client.types import (
 )
 
 
+def _json_mode_prompt(prompt: str) -> str:
+    """Append an OpenAI-compatible JSON mode hint to the prompt."""
+    if not prompt:
+        return "Return only valid json."
+    return f"{prompt}\n\nReturn only valid json."
+
+
 class LLMProvider(ABC):
     """Abstract base class for LLM providers.
 
@@ -206,15 +213,23 @@ class OpenAIProvider(LLMProvider):
             token_kwarg = {"max_tokens": max_tokens}
             temperature_kwarg = {"temperature": temperature}
         try:
-            response = self._client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
+            completion_kwargs = {
+                "model": model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": _json_mode_prompt(system_prompt)
+                        if json_mode
+                        else system_prompt,
+                    },
                     {"role": "user", "content": user_prompt},
                 ],
                 **temperature_kwarg,
                 **token_kwarg,
-            )
+            }
+            if json_mode:
+                completion_kwargs["response_format"] = {"type": "json_object"}
+            response = self._client.chat.completions.create(**completion_kwargs)
         except self._openai.RateLimitError as e:
             retry_after = None
             if e.response is not None:
@@ -281,15 +296,23 @@ class OpenRouterProvider(OpenAIProvider):
         json_mode: bool = False,
     ) -> LLMResponse:
         try:
-            response = self._client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
+            completion_kwargs = {
+                "model": model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": _json_mode_prompt(system_prompt)
+                        if json_mode
+                        else system_prompt,
+                    },
                     {"role": "user", "content": user_prompt},
                 ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+            if json_mode:
+                completion_kwargs["response_format"] = {"type": "json_object"}
+            response = self._client.chat.completions.create(**completion_kwargs)
         except self._openai.RateLimitError as e:
             retry_after = None
             if e.response is not None:

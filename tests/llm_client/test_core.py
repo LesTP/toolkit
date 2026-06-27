@@ -763,6 +763,30 @@ class TestOpenAIProviderTokenParam:
         provider._client.chat.completions.create = fake_create
         return provider, captured
 
+    def test_json_mode_sets_response_format_and_prompt_hint(self):
+        provider, captured = self._provider_with_recorder()
+        provider.call(
+            model="gpt-4o",
+            system_prompt="sys",
+            user_prompt="usr",
+            max_tokens=2048,
+            json_mode=True,
+        )
+        assert captured.get("response_format") == {"type": "json_object"}
+        assert captured["messages"][0]["content"] == "sys\n\nReturn only valid json."
+
+    def test_json_mode_off_leaves_openai_payload_unchanged(self):
+        provider, captured = self._provider_with_recorder()
+        provider.call(
+            model="gpt-4o",
+            system_prompt="sys",
+            user_prompt="usr",
+            max_tokens=2048,
+        )
+        assert "response_format" not in captured
+        assert captured["messages"][0]["content"] == "sys"
+        assert captured["messages"][1]["content"] == "usr"
+
     @pytest.mark.parametrize(
         "model",
         ["gpt-5-mini", "gpt-5.4-mini", "o1", "o1-mini", "o3-mini", "o4-mini"],
@@ -939,6 +963,30 @@ class TestOpenRouterProvider:
         )
         assert captured.get("max_tokens") == 512
         assert "max_completion_tokens" not in captured
+
+    def test_json_mode_sets_response_format_and_prompt_hint(self):
+        provider, captured = self._make_provider()
+        provider.call(
+            model="deepseek/deepseek-v3",
+            system_prompt="sys",
+            user_prompt="usr",
+            max_tokens=512,
+            json_mode=True,
+        )
+        assert captured.get("response_format") == {"type": "json_object"}
+        assert captured["messages"][0]["content"] == "sys\n\nReturn only valid json."
+
+    def test_json_mode_off_leaves_openrouter_payload_unchanged(self):
+        provider, captured = self._make_provider()
+        provider.call(
+            model="deepseek/deepseek-v3",
+            system_prompt="sys",
+            user_prompt="usr",
+            max_tokens=512,
+        )
+        assert "response_format" not in captured
+        assert captured["messages"][0]["content"] == "sys"
+        assert captured["messages"][1]["content"] == "usr"
 
     def test_rate_limit_error_surfaces_as_llm_api_error(self):
         from types import SimpleNamespace
