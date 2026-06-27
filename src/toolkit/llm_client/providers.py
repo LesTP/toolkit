@@ -75,11 +75,19 @@ class AnthropicProvider(LLMProvider):
         temperature: float = 0.7,
         json_mode: bool = False,
     ) -> LLMResponse:
+        messages = [{"role": "user", "content": user_prompt}]
+        # Anthropic does not expose an OpenAI-style `response_format` knob.
+        # When json_mode is requested, use the model's assistant-prefill path
+        # instead of changing the shared provider contract. This is the
+        # asymmetric branch documented for this phase.
+        if json_mode:
+            system_prompt = _json_mode_prompt(system_prompt)
+            messages.append({"role": "assistant", "content": "{"})
         try:
             response = self._client.messages.create(
                 model=model,
                 system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}],
+                messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
@@ -108,8 +116,12 @@ class AnthropicProvider(LLMProvider):
                 or not response.content[0].text.strip():
             raise LLMResponseError("Empty response content from Anthropic API")
 
+        content = response.content[0].text
+        if json_mode and not content.lstrip().startswith("{"):
+            content = "{" + content
+
         return LLMResponse(
-            content=response.content[0].text,
+            content=content,
             model=response.model,
             provider="anthropic",
             token_usage=TokenUsage(

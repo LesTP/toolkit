@@ -725,6 +725,114 @@ class TestCompleteWithRetry:
 
 
 # ---------------------------------------------------------------------------
+# AnthropicProvider
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_anthropic():
+    """Build a minimal anthropic mock sufficient for AnthropicProvider tests."""
+    import sys
+    from types import ModuleType, SimpleNamespace
+
+    if "anthropic" in sys.modules:
+        return None
+
+    fake_anthropic = ModuleType("anthropic")
+    fake_anthropic.RateLimitError = type(
+        "RateLimitError",
+        (Exception,),
+        {"status_code": 429, "response": SimpleNamespace(headers={})},
+    )
+    fake_anthropic.APIStatusError = type(
+        "APIStatusError",
+        (Exception,),
+        {"status_code": 500},
+    )
+    fake_anthropic.APIConnectionError = type(
+        "APIConnectionError",
+        (Exception,),
+        {},
+    )
+
+    class _FakeMessages:
+        def __init__(self):
+            self.create = lambda **kwargs: None
+
+    class _FakeAnthropicClient:
+        def __init__(self, api_key: str):
+            self.api_key = api_key
+            self.messages = _FakeMessages()
+
+    fake_anthropic.Anthropic = _FakeAnthropicClient
+    sys.modules["anthropic"] = fake_anthropic
+    return fake_anthropic
+
+
+_MOCK_ANTHROPIC = _make_mock_anthropic()
+
+
+class TestAnthropicProvider:
+    """Pin the contract for AnthropicProvider's json_mode asymmetry."""
+
+    @staticmethod
+    def _stub_response(content: str = '"status": "ok"}'):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            content=[SimpleNamespace(text=content)],
+            model="claude-sonnet-test",
+            usage=SimpleNamespace(input_tokens=12, output_tokens=4),
+        )
+
+    def _make_provider(self):
+        import importlib
+        import toolkit.llm_client.providers as _mod
+
+        importlib.reload(_mod)
+        from toolkit.llm_client.providers import AnthropicProvider
+
+        provider = AnthropicProvider(api_key="anthropic-test-key")
+        captured: dict = {}
+
+        def fake_create(**kwargs):
+            captured.update(kwargs)
+            return self._stub_response()
+
+        provider._client.messages.create = fake_create
+        return provider, captured
+
+    def test_json_mode_uses_assistant_prefill_and_prompt_hint(self):
+        provider, captured = self._make_provider()
+        response = provider.call(
+            model="claude-sonnet-4-5",
+            system_prompt="sys",
+            user_prompt="usr",
+            max_tokens=2048,
+            json_mode=True,
+        )
+        assert captured["system"] == "sys\n\nReturn only valid json."
+        assert captured["messages"] == [
+            {"role": "user", "content": "usr"},
+            {"role": "assistant", "content": "{"},
+        ]
+        assert "response_format" not in captured
+        assert response.content == '{"status": "ok"}'
+
+    def test_json_mode_off_leaves_anthropic_payload_unchanged(self):
+        provider, captured = self._make_provider()
+        response = provider.call(
+            model="claude-sonnet-4-5",
+            system_prompt="sys",
+            user_prompt="usr",
+            max_tokens=2048,
+        )
+        assert captured["system"] == "sys"
+        assert captured["messages"] == [{"role": "user", "content": "usr"}]
+        assert "response_format" not in captured
+        assert response.content == '"status": "ok"}'
+
+
+# ---------------------------------------------------------------------------
 # OpenAIProvider.call() — model-prefix token-parameter dispatch
 # ---------------------------------------------------------------------------
 
