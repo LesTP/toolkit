@@ -277,6 +277,39 @@ def test_structured_call_adds_json_mode_to_config_when_enabled():
     asyncio.run(_run())
 
 
+def test_structured_call_adds_json_mode_to_dataclass_config_when_enabled():
+    """json_mode=True with a dataclass config must use dataclasses.replace, not dict()."""
+    import dataclasses
+
+    @dataclasses.dataclass
+    class FakeConfig:
+        temperature: float = 0.5
+        json_mode: bool = False
+
+    async def _run():
+        client = SyncFakeClient('{"status": "ok"}')
+        config = FakeConfig(temperature=0.5)
+
+        result = await structured_call(
+            client,
+            config,
+            "commodity",
+            schema=SIMPLE_SCHEMA,
+            system_prompt="Return JSON.",
+            user_prompt="What is the status?",
+            json_mode=True,
+        )
+
+        assert result.success
+        sent_config = client.calls[0]["config"]
+        assert sent_config is not config
+        assert isinstance(sent_config, FakeConfig)
+        assert sent_config.json_mode is True
+        assert config.json_mode is False
+
+    asyncio.run(_run())
+
+
 def test_structured_call_retries_on_validation_failure():
     async def _run():
         client = SequentialFakeClient([

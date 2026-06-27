@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import dataclasses
 from dataclasses import dataclass
 from inspect import isawaitable
 from pathlib import Path
@@ -94,8 +95,10 @@ async def structured_call(
 
     call_config = config
     if json_mode:
-        call_config = dict(config)
-        call_config["json_mode"] = True
+        if dataclasses.is_dataclass(config) and not isinstance(config, type):
+            call_config = dataclasses.replace(config, json_mode=True)
+        else:
+            call_config = {**config, "json_mode": True}
 
     messages: list[dict[str, str]] = [
         {"role": "system", "content": full_system},
