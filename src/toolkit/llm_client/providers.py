@@ -143,13 +143,18 @@ class GeminiProvider(LLMProvider):
         json_mode: bool = False,
     ) -> LLMResponse:
         try:
+            generation_config_kwargs = {
+                "system_instruction": system_prompt,
+                "max_output_tokens": max_tokens,
+                "temperature": temperature,
+            }
+            if json_mode:
+                generation_config_kwargs["response_mime_type"] = "application/json"
             response = self._client.models.generate_content(
                 model=model,
                 contents=user_prompt,
                 config=self._genai.types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    max_output_tokens=max_tokens,
-                    temperature=temperature,
+                    **generation_config_kwargs,
                 ),
             )
         except self._genai.errors.ClientError as e:

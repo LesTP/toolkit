@@ -852,6 +852,101 @@ class TestOpenAIProviderTokenParam:
 
 
 # ---------------------------------------------------------------------------
+# GeminiProvider
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_google():
+    """Build a minimal google.genai mock sufficient for GeminiProvider tests."""
+    import sys
+    from types import ModuleType, SimpleNamespace
+
+    if "google" in sys.modules and hasattr(sys.modules["google"], "genai"):
+        return None
+
+    fake_google = ModuleType("google")
+    fake_genai = ModuleType("google.genai")
+    fake_google.genai = fake_genai
+
+    fake_genai.errors = SimpleNamespace(
+        ClientError=type("ClientError", (Exception,), {}),
+        ServerError=type("ServerError", (Exception,), {}),
+    )
+    fake_genai.Client = lambda api_key: SimpleNamespace(
+        models=SimpleNamespace(
+            generate_content=lambda **kwargs: None,
+        )
+    )
+    fake_genai.types = SimpleNamespace(
+        GenerateContentConfig=lambda **kwargs: SimpleNamespace(**kwargs),
+    )
+
+    sys.modules["google"] = fake_google
+    sys.modules["google.genai"] = fake_genai
+    return fake_genai
+
+
+_MOCK_GOOGLE = _make_mock_google()
+
+
+class TestGeminiProvider:
+    """Pin the contract for GeminiProvider's json_mode payload shaping."""
+
+    @staticmethod
+    def _stub_gemini_response():
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            text="ok",
+            usage_metadata=SimpleNamespace(
+                prompt_token_count=11,
+                candidates_token_count=4,
+            ),
+        )
+
+    def _make_provider(self):
+        """Return (provider, captured_kwargs_dict) with generate_content intercepted."""
+        import importlib
+        import toolkit.llm_client.providers as _mod
+        importlib.reload(_mod)
+        from toolkit.llm_client.providers import GeminiProvider
+
+        provider = GeminiProvider(api_key="gemini-test-key")
+        captured: dict = {}
+
+        def fake_generate_content(**kwargs):
+            captured.update(kwargs)
+            return self._stub_gemini_response()
+
+        provider._client.models.generate_content = fake_generate_content
+        return provider, captured
+
+    def test_json_mode_sets_response_mime_type(self):
+        provider, captured = self._make_provider()
+        provider.call(
+            model="gemini-2.5-flash",
+            system_prompt="sys",
+            user_prompt="usr",
+            max_tokens=2048,
+            json_mode=True,
+        )
+        assert captured["config"].response_mime_type == "application/json"
+        assert captured["config"].system_instruction == "sys"
+
+    def test_json_mode_off_leaves_gemini_payload_unchanged(self):
+        provider, captured = self._make_provider()
+        provider.call(
+            model="gemini-2.5-flash",
+            system_prompt="sys",
+            user_prompt="usr",
+            max_tokens=2048,
+        )
+        assert not hasattr(captured["config"], "response_mime_type")
+        assert captured["config"].system_instruction == "sys"
+        assert captured["config"].max_output_tokens == 2048
+        assert captured["config"].temperature == 0.7
+
+
+# ---------------------------------------------------------------------------
 # OpenRouterProvider
 # ---------------------------------------------------------------------------
 
