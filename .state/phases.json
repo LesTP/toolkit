@@ -1,0 +1,33 @@
+[
+  {
+    "id": 1,
+    "title": "Cost Accountant — Core Implementation",
+    "regime": "build",
+    "dependencies": [],
+    "status": "complete"
+  },
+  {
+    "id": 2,
+    "title": "Prompt Regression — Extract from Diplomat",
+    "regime": "build",
+    "dependencies": [],
+    "status": "complete"
+  },
+  {
+    "id": 4,
+    "title": "Clankmates Client — Vendor + Extend from clanker-courts-player-client",
+    "regime": "build",
+    "dependencies": [],
+    "status": "complete"
+  },
+  {
+    "id": 5,
+    "module": "structured_llm",
+    "title": "JSON robustness: provider-native json_mode",
+    "regime": "build",
+    "dependencies": [
+      "llm_client"
+    ],
+    "status": "pending"
+  }
+]

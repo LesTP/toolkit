@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "phase": 5,
+  "state": "plan",
+  "gotchas": [
+    "**Running tests:** Use `/home/claude/toolkit-venv/bin/python3 -m pytest` (not bare `pytest` or `python3 -m pytest` — those hit system Python which has no pytest). The venv is inside the container at `/home/claude/toolkit-venv/`.",
+    "**PYTHONPATH:** When running tests, set `PYTHONPATH=/home/claude/workspace/toolkit/src` so pytest can find the `toolkit` package, or use `cd /home/claude/workspace/toolkit && /home/claude/toolkit-venv/bin/python3 -m pytest`.",
+    "**jsonschema missing from venv:** The toolkit venv is read-only. To test `structured_llm`: `pip install --target=/tmp/toolkit-deps jsonschema` then `PYTHONPATH=/home/claude/workspace/toolkit/src:/tmp/toolkit-deps pytest tests/structured_llm/`."
+  ],
+  "budget_type": "steps"
+}
