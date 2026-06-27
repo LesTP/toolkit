@@ -116,6 +116,7 @@ class TestLLMConfig:
         config = LLMConfig(provider="test", api_key="key")
         assert config.max_tokens == 4096
         assert config.temperature == 0.7
+        assert config.json_mode is False
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +137,7 @@ class StubProvider(LLMProvider):
         user_prompt: str,
         max_tokens: int,
         temperature: float = 0.7,
+        json_mode: bool = False,
     ) -> LLMResponse:
         self.calls.append({
             "model": model,
@@ -143,6 +145,7 @@ class StubProvider(LLMProvider):
             "user_prompt": user_prompt,
             "max_tokens": max_tokens,
             "temperature": temperature,
+            "json_mode": json_mode,
         })
         return LLMResponse(
             content="stub response",
@@ -261,6 +264,26 @@ class TestComplete:
         config = self._config(max_tokens=2000)
         complete([Message(role="user", content="hi")], config)
         assert stub.calls[0]["max_tokens"] == 2000
+
+    def test_json_mode_passthrough(self, monkeypatch):
+        stub = StubProvider()
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.create_provider",
+            lambda config: stub,
+        )
+        config = self._config(json_mode=True)
+        complete([Message(role="user", content="hi")], config)
+        assert stub.calls[0]["json_mode"] is True
+
+    def test_json_mode_defaults_false(self, monkeypatch):
+        stub = StubProvider()
+        monkeypatch.setattr(
+            "toolkit.llm_client.providers.create_provider",
+            lambda config: stub,
+        )
+        config = self._config()
+        complete([Message(role="user", content="hi")], config)
+        assert stub.calls[0]["json_mode"] is False
 
     def test_returns_response(self, monkeypatch):
         stub = StubProvider()
@@ -391,6 +414,7 @@ class FlakeyProvider(LLMProvider):
         user_prompt: str,
         max_tokens: int,
         temperature: float = 0.7,
+        json_mode: bool = False,
     ) -> LLMResponse:
         self.call_count += 1
         if self._exceptions:

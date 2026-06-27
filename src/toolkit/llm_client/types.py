@@ -59,6 +59,7 @@ class LLMConfig:
     models: dict[str, str] = field(default_factory=dict)
     max_tokens: int = 4096
     temperature: float = 0.7
+    json_mode: bool = False
 
     @property
     def model(self) -> str:

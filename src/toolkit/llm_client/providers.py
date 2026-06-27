@@ -35,6 +35,7 @@ class LLMProvider(ABC):
         user_prompt: str,
         max_tokens: int,
         temperature: float = 0.7,
+        json_mode: bool = False,
     ) -> LLMResponse:
         """Call the LLM and return a structured response.
 
@@ -65,6 +66,7 @@ class AnthropicProvider(LLMProvider):
         user_prompt: str,
         max_tokens: int,
         temperature: float = 0.7,
+        json_mode: bool = False,
     ) -> LLMResponse:
         try:
             response = self._client.messages.create(
@@ -131,6 +133,7 @@ class GeminiProvider(LLMProvider):
         user_prompt: str,
         max_tokens: int,
         temperature: float = 0.7,
+        json_mode: bool = False,
     ) -> LLMResponse:
         try:
             response = self._client.models.generate_content(
@@ -185,6 +188,7 @@ class OpenAIProvider(LLMProvider):
         user_prompt: str,
         max_tokens: int,
         temperature: float = 0.7,
+        json_mode: bool = False,
     ) -> LLMResponse:
         # Reasoning-family models (gpt-5.x, o1/o3/o4) differ from legacy
         # gpt-4.x / gpt-3.5 in two ways, both keyed off the model-name prefix:
@@ -274,6 +278,7 @@ class OpenRouterProvider(OpenAIProvider):
         user_prompt: str,
         max_tokens: int,
         temperature: float = 0.7,
+        json_mode: bool = False,
     ) -> LLMResponse:
         try:
             response = self._client.chat.completions.create(
@@ -424,6 +429,7 @@ def complete(
         user_prompt=user_prompt,
         max_tokens=config.max_tokens,
         temperature=config.temperature,
+        json_mode=config.json_mode,
     )
 
 
