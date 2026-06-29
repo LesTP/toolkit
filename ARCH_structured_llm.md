@@ -179,9 +179,9 @@ Consumers then convert `data` into their own domain result types.
 
 ## Out of Scope
 
-- JSON repair, partial JSON extraction, or extraction from arbitrary prose.
-  (A surrounding Markdown code fence around the whole response IS stripped,
-  but no other extraction is attempted.)
+- JSON repair, partial JSON extraction, or `<think>` handling. Bounded
+  extraction is supported only for the whole-response fence strip plus the
+  outermost balanced JSON object; anything beyond that still raises.
 - LLM rate limits or provider selection.
 - Importing or wrapping `toolkit.llm_client`.
 
@@ -345,6 +345,7 @@ Halt PLAN/EXECUTE and escalate (`EXIT 2`, devlog entry) on any of:
 ## Change History
 | Date | What Changed | Why |
 |------|--------------|-----|
+| 2026-06-29 | Revised `parse_json_response` contract to document bounded extraction and deferred `<think>` handling | Keep the ARCH aligned with the implemented prose-tolerant parser while preserving the no-general-repair boundary |
 | 2026-06-29 | Added Phasing (Phase 6: prose-tolerant `parse_json_response`, Build), re-aimed from real R1 fixtures | Real OpenRouter `deepseek-r1` captures show reasoning is returned in a separate `message.reasoning` field (no `<think>` in `content`); the only failing shape is prose-then-(fenced)-JSON, so outermost-balanced-`{…}` extraction is the load-bearing fix and `<think>` stripping is deferred until a real inline-reasoning fixture exists |
 | 2026-06-26 | Added Phasing (Phase 5: provider-native `json_mode`, Build) + Escalation Triggers | Author the next-phase spec so autonomous PLAN can plan Change 1 without inventing scope; threads opt-in `json_mode` via `config` to four providers, default-off |
 | 2026-06-27 | `structured_call` gained opt-in `json_mode` propagation on config | Preserve default-off behavior while letting callers request provider-native JSON through the injected client contract |
