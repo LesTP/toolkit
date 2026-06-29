@@ -69,11 +69,19 @@ class StructuredResult:
 - **Returns:** parsed JSON object as a dict
 - **Errors:** `ValueError` if the response is invalid JSON or parses to a non-object value.
 
-Before parsing, the helper strips a single surrounding Markdown code fence
-(``` ```json ... ``` `` or `` ``` ... ``` ``) when the *entire* response is wrapped in one.
-This tolerates Anthropic and Google models that wrap JSON in fences even when
-instructed to return raw JSON. It does not extract JSON from arbitrary prose:
-responses with explanatory text outside or instead of the fence still raise.
+Before parsing, the helper applies bounded extraction in two passes:
+
+1. **Whole-response fence strip** — if the *entire* response is a single
+   `` ```json ... ``` `` or `` ``` ... ``` `` block, the fence is stripped and
+   the inner text is parsed directly.
+2. **Outermost balanced `{…}` extraction** — if the stripped text is still not
+   valid JSON (e.g. it contains explanatory prose around the JSON block), the
+   helper scans for the outermost balanced `{…}` object and parses that.
+
+This tolerates reasoning models (e.g. DeepSeek R1 via OpenRouter) that emit an
+explanatory prose paragraph before a fenced JSON block in the `content` field.
+It does **not** perform general JSON repair or handle `<think>` tags; those are
+deferred until a real inline-reasoning fixture exists.
 
 ### validate_json_schema
 - **Signature:** `validate_json_schema(data: dict[str, Any], schema: dict[str, Any], label: str = "") -> None`
