@@ -43,28 +43,32 @@
     "phase": 6,
     "step": 1,
     "title": "Baseline test: lock current parse_json_response behavior against all four R1 fixtures",
-    "status": "pending",
-    "notes": "Fixtures already committed. Write test asserting r1_reasoned/r1_raw/r1_extract parse successfully; r1_fenced raises ValueError. This locks the gap before the fix lands."
+    "status": "complete",
+    "notes": "Fixtures already committed. Write test asserting r1_reasoned/r1_raw/r1_extract parse successfully; r1_fenced raises ValueError. This locks the gap before the fix lands.",
+    "commit": "cd9a898"
   },
   {
     "phase": 6,
     "step": 2,
     "title": "Implement outermost-balanced-{...} extraction fallback in parse_json_response",
-    "status": "pending",
-    "notes": "After existing fence-strip path, add a fallback that extracts the outermost balanced {...} object from surrounding prose. Must use balanced-brace matching (not naive first-{). Include: test over all four fixtures (all parse); test proving it picks the intended object over a {...}-fragment embedded in prose; no change to clean-JSON or whole-fence-response paths."
+    "status": "complete",
+    "notes": "After existing fence-strip path, add a fallback that extracts the outermost balanced {...} object from surrounding prose. Must use balanced-brace matching (not naive first-{). Include: test over all four fixtures (all parse); test proving it picks the intended object over a {...}-fragment embedded in prose; no change to clean-JSON or whole-fence-response paths.",
+    "commit": "c58ecb2"
   },
   {
     "phase": 6,
     "step": 3,
     "title": "Unit test: OpenRouter reasoning separation (reasoning in message.reasoning, no <think> in content)",
-    "status": "pending",
-    "notes": "No code change expected. Add a test in tests/structured_llm/ that reads the r1_fenced.meta.json fixture metadata and asserts has_reasoning_field=true, content_has_think_tag=false. Also verify the existing llm_client OpenRouter provider path handles message.reasoning (read providers.py, write a unit test or note in the test). Documents the existing separation so the no-<think>-stripping decision is grounded in real behavior."
+    "status": "complete",
+    "notes": "No code change expected. Add a test in tests/structured_llm/ that reads the r1_fenced.meta.json fixture metadata and asserts has_reasoning_field=true, content_has_think_tag=false. Also verify the existing llm_client OpenRouter provider path handles message.reasoning (read providers.py, write a unit test or note in the test). Documents the existing separation so the no-<think>-stripping decision is grounded in real behavior.",
+    "commit": "c6df354"
   },
   {
     "phase": 6,
     "step": 4,
     "title": "Docs + back-compat sweep",
-    "status": "pending",
-    "notes": "Update ARCH_structured_llm.md: (1) revise Out of Scope from no-prose-extraction to bounded-extraction note (fence strip + outermost balanced object; no general repair; no <think> until real inline-reasoning fixture exists); (2) update parse_json_response doc to describe the fallback; (3) append Change History row. Confirm all pre-existing parse_json_response tests still pass (additive change only)."
+    "status": "complete",
+    "notes": "Update ARCH_structured_llm.md: (1) revise Out of Scope from no-prose-extraction to bounded-extraction note (fence strip + outermost balanced object; no general repair; no <think> until real inline-reasoning fixture exists); (2) update parse_json_response doc to describe the fallback; (3) append Change History row. Confirm all pre-existing parse_json_response tests still pass (additive change only).",
+    "commit": "0c3c0f8"
   }
 ]

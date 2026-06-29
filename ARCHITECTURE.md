@@ -55,7 +55,7 @@ Diplomat:        Prompt scenarios → Prompt Regression → diplomat module call
 | 5 | JSON-RPC Client | Leaf. Working in codexbot. Extract if second consumer materializes. | Complete |
 | 6 | Cost Accountant | Wraps LLM Client. Budget enforcement, cost ledger, rate-limit abort. Prerequisite for Phosphene LLM resume. | Complete |
 | 7 | Prompt Regression | Leaf test framework extracted from diplomat so prompt behavior checks can be reused by Diplomat and Phosphene. | Complete |
-| 8 | Structured LLM | Reusable JSON extraction + schema validation helpers. Injected LLM client; structured_call with retry, json_mode opt-in (provider-native JSON output via LLMConfig.json_mode). | Complete — json_mode phase 2026-06-27 |
+| 8 | Structured LLM | Reusable JSON extraction + schema validation helpers. Injected LLM client; structured_call with retry, json_mode opt-in (provider-native JSON output via LLMConfig.json_mode); parse_json_response with bounded extraction (whole-response fence strip + outermost balanced-object fallback for prose-wrapped JSON from reasoning models). | Complete — json_mode 2026-06-27; prose-tolerant parsing 2026-06-29 |
 | 9 | Gateway | Multi-platform message bus extracted from Phosphene. Telegram + log + fake adapters; inbound + outbound; feedback signal dispatch. | Complete — extracted 2026-06 |
 | 10 | Source Ingestion | Adapter framework + RSS/Telegram channel/Reddit/human-share/corpus importers extracted from Phosphene. | Complete — extracted 2026-06 |
 | 11 | Feedback Collector | Platform signal normalisation extracted from Phosphene. Memory store contract is duck-typed (no toolkit-cross-import). | Complete — extracted 2026-06 |

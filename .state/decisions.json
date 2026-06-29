@@ -106,5 +106,15 @@
     "priority": "medium",
     "decision": "Anthropic API has no response_format kwarg. When json_mode=True, AnthropicProvider injects an assistant prefill message (role='assistant', content='{') into the messages list before calling messages.create. This steers output toward JSON without an API-level contract. Document the asymmetry in ARCH.",
     "rationale": "Anthropic lacks a json_object response_format. Prefill is the standard workaround. The ARCH spec explicitly lists this as the primary option and requires documenting the asymmetry."
+  },
+  {
+    "id": "D-12",
+    "phase": 6,
+    "title": "Skip rename: test_parse_json_response_prefers_later_balanced_object_over_prose_fragment -> _wider",
+    "status": "closed",
+    "priority": "low",
+    "decision": "Leave the test name as-is; it documents intent from the caller perspective even though the implementation selects by string length.",
+    "rationale": "The test asserts the right outcome (larger real JSON wins over small prose fragment). Renaming would be accurate but adds noise to git blame for low signal. The implementation comment already says widest.",
+    "revisit_if": "Next refactor pass over structured_llm tests."
   }
 ]
