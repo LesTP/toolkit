@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 
 import pytest
 
@@ -17,6 +18,9 @@ from toolkit.structured_llm import (
     structured_complete,
     validate_json_schema,
 )
+
+
+FIXTURES_DIR = Path(__file__).with_name("fixtures")
 
 
 def test_parse_json_response_valid_object():
@@ -49,6 +53,44 @@ def test_parse_json_response_strips_plain_code_fence():
 def test_parse_json_response_rejects_prose_with_embedded_json():
     with pytest.raises(ValueError, match="not valid JSON"):
         parse_json_response('Here is the JSON: {"status": "ok"}')
+
+
+@pytest.mark.parametrize(
+    ("fixture_name", "expected"),
+    [
+        (
+            "r1_reasoned.txt",
+            {
+                "sentiment": "neutral",
+                "topics": ["pricing", "performance", "UI"],
+                "summary": "The pricing is fair and performance is excellent, but the user interface is outdated.",
+            },
+        ),
+        (
+            "r1_raw.txt",
+            {
+                "sentiment": "neutral",
+                "topics": ["release speed", "onboarding documentation"],
+                "summary": "Praised the new release's speed but criticized confusing onboarding documentation.",
+            },
+        ),
+        (
+            "r1_extract.txt",
+            {
+                "sentiment": "neutral",
+                "topics": ["checkout", "support"],
+                "summary": "Criticizes the slow and buggy checkout process but praises the friendly and responsive support team.",
+            },
+        ),
+    ],
+)
+def test_parse_json_response_current_fixture_successes(fixture_name, expected):
+    assert parse_json_response((FIXTURES_DIR / fixture_name).read_text(encoding="utf-8")) == expected
+
+
+def test_parse_json_response_current_fixture_fenced_prose_fails():
+    with pytest.raises(ValueError, match="not valid JSON"):
+        parse_json_response((FIXTURES_DIR / "r1_fenced.txt").read_text(encoding="utf-8"))
 
 
 def test_validate_json_schema_passes():
