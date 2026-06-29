@@ -259,13 +259,64 @@ def _strip_code_fences(text: str) -> str:
     return text
 
 
+def _extract_balanced_json_object(text: str) -> dict[str, Any] | None:
+    """Extract the widest top-level balanced JSON object from arbitrary text."""
+    best_data: dict[str, Any] | None = None
+    best_length = -1
+
+    candidate_start: int | None = None
+    depth = 0
+    in_string = False
+    escaped = False
+
+    for index, char in enumerate(text):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+            continue
+
+        if char == "{":
+            if depth == 0:
+                candidate_start = index
+            depth += 1
+            continue
+
+        if char == "}" and depth > 0:
+            depth -= 1
+            if depth == 0 and candidate_start is not None:
+                candidate = text[candidate_start : index + 1]
+                try:
+                    data = json.loads(candidate)
+                except json.JSONDecodeError:
+                    candidate_start = None
+                    continue
+
+                if isinstance(data, dict) and len(candidate) > best_length:
+                    best_data = data
+                    best_length = len(candidate)
+                candidate_start = None
+
+    return best_data
+
+
 def parse_json_response(response_text: str) -> dict[str, Any]:
     """Parse an LLM response as a JSON object."""
     cleaned = _strip_code_fences(response_text)
     try:
         data = json.loads(cleaned)
     except json.JSONDecodeError as error:
-        raise ValueError(f"LLM response is not valid JSON: {error}") from error
+        extracted = _extract_balanced_json_object(cleaned)
+        if extracted is None:
+            raise ValueError(f"LLM response is not valid JSON: {error}") from error
+        data = extracted
 
     if not isinstance(data, dict):
         raise ValueError("LLM response JSON must be an object")

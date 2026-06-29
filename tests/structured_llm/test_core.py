@@ -50,9 +50,10 @@ def test_parse_json_response_strips_plain_code_fence():
     assert parse_json_response(fenced) == {"x": 1}
 
 
-def test_parse_json_response_rejects_prose_with_embedded_json():
-    with pytest.raises(ValueError, match="not valid JSON"):
-        parse_json_response('Here is the JSON: {"status": "ok"}')
+def test_parse_json_response_extracts_json_from_prose():
+    assert parse_json_response('Here is the JSON: {"status": "ok"}') == {
+        "status": "ok",
+    }
 
 
 @pytest.mark.parametrize(
@@ -82,15 +83,36 @@ def test_parse_json_response_rejects_prose_with_embedded_json():
                 "summary": "Criticizes the slow and buggy checkout process but praises the friendly and responsive support team.",
             },
         ),
+        (
+            "r1_fenced.txt",
+            {
+                "sentiment": "neutral",
+                "topics": ["hardware", "companion app"],
+                "summary": "The hardware is praised as gorgeous, but the companion app is criticized for constant crashes.",
+            },
+        ),
     ],
 )
 def test_parse_json_response_current_fixture_successes(fixture_name, expected):
     assert parse_json_response((FIXTURES_DIR / fixture_name).read_text(encoding="utf-8")) == expected
 
 
-def test_parse_json_response_current_fixture_fenced_prose_fails():
-    with pytest.raises(ValueError, match="not valid JSON"):
-        parse_json_response((FIXTURES_DIR / "r1_fenced.txt").read_text(encoding="utf-8"))
+def test_parse_json_response_prefers_later_balanced_object_over_prose_fragment():
+    response = (
+        'Context with a brace fragment: {"ignore": true}.\n'
+        'The actual answer is below.\n\n'
+        '```json\n'
+        '{\n'
+        '  "status": "ok",\n'
+        '  "detail": "real answer"\n'
+        '}\n'
+        '```'
+    )
+
+    assert parse_json_response(response) == {
+        "status": "ok",
+        "detail": "real answer",
+    }
 
 
 def test_validate_json_schema_passes():
