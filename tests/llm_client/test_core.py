@@ -1326,3 +1326,31 @@ class TestOpenRouterProvider:
             max_tokens=100,
         )
         assert response.content == "actual answer"
+
+    def test_reasoning_stays_separate_from_answer_content(self):
+        """OpenRouter reasoning models may put chain-of-thought in
+        message.reasoning while content contains the final answer only."""
+        from types import SimpleNamespace
+
+        provider, _ = self._make_provider()
+
+        def fake_create(**kwargs):
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(
+                    content='{"status": "ok"}',
+                    reasoning="<think>internal reasoning</think>",
+                ))],
+                usage=SimpleNamespace(prompt_tokens=5, completion_tokens=3),
+                model="deepseek/deepseek-r1",
+            )
+
+        provider._client.chat.completions.create = fake_create
+
+        response = provider.call(
+            model="deepseek/deepseek-r1",
+            system_prompt="s",
+            user_prompt="u",
+            max_tokens=100,
+        )
+        assert response.content == '{"status": "ok"}'
+        assert "<think>" not in response.content
