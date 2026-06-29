@@ -29,5 +29,15 @@
       "llm_client"
     ],
     "status": "complete"
+  },
+  {
+    "id": 6,
+    "module": "structured_llm",
+    "title": "Prose-tolerant JSON parsing for reasoning models",
+    "regime": "build",
+    "dependencies": [
+      "llm_client"
+    ],
+    "status": "pending"
   }
 ]
