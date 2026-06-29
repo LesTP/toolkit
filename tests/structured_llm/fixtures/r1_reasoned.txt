@@ -1,0 +1,5 @@
+{
+  "sentiment": "neutral",
+  "topics": ["pricing", "performance", "UI"],
+  "summary": "The pricing is fair and performance is excellent, but the user interface is outdated."
+}

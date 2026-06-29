@@ -1,0 +1,9 @@
+{
+  "model": "deepseek/deepseek-r1",
+  "case": "raw",
+  "finish_reason": "stop",
+  "has_reasoning_field": true,
+  "reasoning_chars": 4603,
+  "content_chars": 198,
+  "content_has_think_tag": false
+}

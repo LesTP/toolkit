@@ -1,0 +1,7 @@
+```json
+{
+  "sentiment": "neutral",
+  "topics": ["checkout", "support"],
+  "summary": "Criticizes the slow and buggy checkout process but praises the friendly and responsive support team."
+}
+```

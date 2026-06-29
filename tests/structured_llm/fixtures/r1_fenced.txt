@@ -1,0 +1,9 @@
+The input text expresses a mixed review with both positive and negative aspects, but overall sentiment is neutral due to the balance. The main topics are the hardware and the companion app. The summary concisely captures the key points.
+
+```json
+{
+  "sentiment": "neutral",
+  "topics": ["hardware", "companion app"],
+  "summary": "The hardware is praised as gorgeous, but the companion app is criticized for constant crashes."
+}
+```

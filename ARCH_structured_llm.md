@@ -253,26 +253,99 @@ PLAN may refine:
 existing callers unchanged (default-off); the Anthropic asymmetry is
 documented. (Live per-provider smoke probes are a separate manual step.)
 
+### Phase 6 — Prose-tolerant JSON parsing for reasoning models (Build)
+
+**Goal.** Make `parse_json_response` tolerant of the explanatory prose that
+reasoning models (e.g. DeepSeek-R1) emit *around* the JSON object, so their
+responses parse — **without** changing behavior for the clean-JSON and
+whole-response-fence cases that already work. Additive and backward-compatible.
+
+**Grounded in real fixtures (read first).** Four real `deepseek/deepseek-r1`
+responses were captured via OpenRouter and committed under
+`tests/structured_llm/fixtures/` (each with a `.meta.json`):
+- `r1_reasoned.txt` — **clean JSON** (already parses).
+- `r1_raw.txt`, `r1_extract.txt` — **whole-response ` ```json ` fence**
+  (already parses via the existing single-fence strip).
+- `r1_fenced.txt` — **explanatory prose paragraph, then a ` ```json ` block** —
+  the **only** shape that currently *fails* (`parse_json_response` strips a
+  fence only when the *entire* response is one).
+
+**Key reality (corrects the original Change-2 premise).** OpenRouter's
+`deepseek/deepseek-r1` returns its chain-of-thought in a **separate
+`message.reasoning` field**, *not* in `content`; **no `<think>` tags appear in
+`content`** (all four fixtures: `has_reasoning_field=true`,
+`content_has_think_tag=false`). So the residual problem the parser must solve is
+**prose-around-JSON in `content`**, not inline `<think>` blocks.
+
+**Module + dependency.** Module: `structured_llm` — the change is in
+`parse_json_response`, a pure string→dict function. The OpenRouter reasoning
+separation lives in `llm_client/providers.py` and **already exists** (confirmed
+by the capture and a dependency probe). Declare `dependencies: ["llm_client"]`
+so the dep probe / integration check run, but expect **no provider code
+change** — only a test documenting the existing separation.
+
+**Scope (the load-bearing change).** In `parse_json_response`, after the
+existing whole-response fence strip and before `json.loads`, add a fallback that
+**extracts the outermost _balanced_ `{…}` object** from surrounding prose
+(balanced-brace matching — **not** a naive "first `{`"). This handles
+prose-then-JSON whether the JSON is fenced or bare. Clean JSON and
+whole-response-fenced JSON must still parse exactly as before; non-object
+results still raise.
+
+**Deferred — do NOT build here (no real fixture):**
+- **`<think>…</think>` stripping.** No captured fixture contains `<think>` in
+  `content` (this provider separates reasoning). Per the "real, not synthetic"
+  rule, do not implement or test `<think>` handling against fabricated data.
+  Re-open as a separate phase if/when a model that *inlines* reasoning in
+  `content` is actually in use.
+- General JSON repair / partial-JSON salvage beyond the single balanced object.
+
+**Step shape (Build — smallest testable steps).** PLAN may refine:
+1. Commit the four real fixtures + a **baseline test** asserting current
+   `parse_json_response` parses `r1_reasoned` / `r1_raw` / `r1_extract` but
+   **fails** on `r1_fenced` (locks in the real gap).
+2. Implement the outermost-balanced-`{…}` fallback + unit tests over all four
+   fixtures, **including** a case proving it selects the intended object rather
+   than a `{…}`-looking fragment embedded in prose.
+3. Add a unit test documenting the existing OpenRouter behavior: reasoning lands
+   in the separate `message.reasoning` field, `content` is answer-only (no code
+   change expected — verify the existing path in `providers.py`).
+4. Docs + back-compat sweep: revise the **Out of Scope** "no prose extraction"
+   item to "bounded extraction: whole-response fence strip + outermost balanced
+   object; still no general JSON repair, and no `<think>` handling yet"; confirm
+   existing `parse_json_response` tests pass unmodified; append the Change
+   History row.
+
+**Acceptance.** `parse_json_response` parses all four real fixtures (clean,
+fenced, prose+fenced); the `r1_fenced` sample that currently fails now parses to
+the correct object; existing callers/tests unchanged (additive); **no `<think>`
+logic is added or validated against synthetic data.**
+
 ## Escalation Triggers
 
 Halt PLAN/EXECUTE and escalate (`EXIT 2`, devlog entry) on any of:
 
-- **Cross-module breakage: llm_client/consumers** — if `json_mode` cannot be
-  carried on `config` and would require changing the injected
-  `complete(messages, config, tier)` signature in a way that breaks existing
-  consumers. Surface as a contract change for decision, do not silently
-  rewrite the signature.
-- **Dep probe: `<provider>` contract mismatch** — if the installed provider
-  SDK in `llm_client/providers.py` does not accept `response_format` /
-  `response_mime_type` in the available version, so the change can't be made
-  as specified.
-- **Scope creep into Change 2** — if the work starts requiring changes to
-  `parse_json_response` (CoT/`<think>` handling, prose extraction); that is a
-  separate phase. Stop and flag rather than expanding scope.
+**General**
+- **Cross-module breakage: llm_client/consumers** — a change that would require
+  altering the injected `complete(messages, config, tier)` signature in a way
+  that breaks existing consumers. Surface as a contract change for decision; do
+  not silently rewrite the signature.
+- **Dep probe: `<provider>` contract mismatch** — the installed provider SDK in
+  `llm_client/providers.py` doesn't behave as the phase assumes.
+
+**Phase 6 (prose-tolerant parsing)**
+- **Balanced extraction unreliable on a real sample** — if the outermost-`{…}`
+  fallback selects a prose-embedded fragment instead of the intended object on
+  any committed fixture, stop and surface the failing sample rather than
+  shipping a fragile heuristic (a different strategy may be needed).
+- **No real fixture for a shape** — do **not** implement or validate `<think>`
+  stripping or general JSON repair against synthetic data; those are deferred
+  until a real captured sample exists. Stop and flag scope creep.
 
 ## Change History
 | Date | What Changed | Why |
 |------|--------------|-----|
+| 2026-06-29 | Added Phasing (Phase 6: prose-tolerant `parse_json_response`, Build), re-aimed from real R1 fixtures | Real OpenRouter `deepseek-r1` captures show reasoning is returned in a separate `message.reasoning` field (no `<think>` in `content`); the only failing shape is prose-then-(fenced)-JSON, so outermost-balanced-`{…}` extraction is the load-bearing fix and `<think>` stripping is deferred until a real inline-reasoning fixture exists |
 | 2026-06-26 | Added Phasing (Phase 5: provider-native `json_mode`, Build) + Escalation Triggers | Author the next-phase spec so autonomous PLAN can plan Change 1 without inventing scope; threads opt-in `json_mode` via `config` to four providers, default-off |
 | 2026-06-27 | `structured_call` gained opt-in `json_mode` propagation on config | Preserve default-off behavior while letting callers request provider-native JSON through the injected client contract |
 | 2026-05-28 | Initial ARCH - structured LLM extraction contract | Define reusable boundary before implementation |
