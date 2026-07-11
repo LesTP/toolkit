@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 3,
   "phase": 7,
   "state": "plan",
   "gotchas": [
