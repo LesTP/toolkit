@@ -36,6 +36,14 @@ Composing modules (depend on exactly one leaf module):
 ## Cross-Project References
 - VALIDATION_NOTES.md — interface checks against Year-in-Search, Phosphene, Codexbot, Diplomat, and TGBot migration notes
 
+## Consumer contract (shared library — do not fork)
+Toolkit is the fleet's **shared library**: consumers (phosphene, masorah, diplomat,
+codexbot, …) **import/consume its modules as-is and never modify or fork them**.
+Fixes and new capability land *here*, behind the module's public API (`API.md`),
+so every consumer benefits and no divergent copies accrue. If a consumer needs a
+change, change it in toolkit (respecting the "second consumer" rule in PROJECT.md),
+not in the consumer.
+
 ## Known Consumers
 - Phosphene: c:\Users\myeluashvili\claude-code-workspace\projects\phosphene\
 - Year-in-Search: c:\Users\myeluashvili\claude-code-workspace\projects\year-in-search\
