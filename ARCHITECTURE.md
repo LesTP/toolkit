@@ -64,7 +64,7 @@ Diplomat:        Prompt scenarios → Prompt Regression → diplomat module call
 | 12 | Coaching | Tag-based operator-input parser extracted from Diplomat. YAML config (lazy-imported) or pre-parsed dict. Clanker Courts incoming as second consumer. | Complete — extracted 2026-06-05 |
 | 13 | Edit Classifier | LLM-as-judge categorical classifier extracted from Diplomat. Six-category enum (project-side factory + prompt). Clanker Courts incoming as second consumer. | Complete — extracted 2026-06-07 |
 | 14 | Clankmates Client | Subprocess wrapper + message decoders + cursor store + peer-DM screener. Vendored from clanker-courts-player-client; extended for toolkit reuse. Consumers: Diplomat (arena), Clanker Courts. | Complete |
-| 15 | Screenshot | Leaf. Headless page capture so any worker backend can see the web UI it builds (shell command, no MCP). Ported from `_screenshot-tool`; second consumer = Marginalia (+ build-a-stew, i2c dashboard D-dash-10). i2c phase 7; contract + steps in `ARCH_screenshot.md`. | Not started |
+| 15 | Screenshot | Leaf. Headless page capture so any worker backend can see the web UI it builds (shell command, no MCP). Ported from `_screenshot-tool`; second consumer = Marginalia (+ build-a-stew, i2c dashboard D-dash-10). i2c phase 7; contract + steps in `ARCH_screenshot.md`. | Complete — 2026-10-04 |
 
 ## Coupling Notes
 
