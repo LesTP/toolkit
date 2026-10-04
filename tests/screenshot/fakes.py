@@ -28,13 +28,11 @@ class FakePage:
         goto_raises: Exception | None = None,
         goto_status: int | None = None,
         screenshot_raises: Exception | None = None,
-        before_shot_raises: Exception | None = None,
         close_raises: Exception | None = None,
     ) -> None:
         self.goto_raises = goto_raises
         self.goto_status = goto_status
         self.screenshot_raises = screenshot_raises
-        self.before_shot_raises = before_shot_raises
         self.close_raises = close_raises
 
         self.calls: list[tuple[str, Any]] = []
