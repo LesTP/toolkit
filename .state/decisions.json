@@ -116,5 +116,26 @@
     "decision": "Leave the test name as-is; it documents intent from the caller perspective even though the implementation selects by string length.",
     "rationale": "The test asserts the right outcome (larger real JSON wins over small prose fragment). Renaming would be accurate but adds noise to git blame for low signal. The implementation comment already says widest.",
     "revisit_if": "Next refactor pass over structured_llm tests."
+  },
+  {
+    "id": "D-13",
+    "phase": 7,
+    "title": "Phase 7 step decomposition: 5 steps following Module Contract phasing",
+    "status": "closed",
+    "priority": "medium",
+    "decision": "Adopted the 5-step decomposition from ARCH_screenshot.md verbatim (types/skeleton, capture_many, static_server, CLI, live smoke+docs). No step shape ambiguity — the ARCH phasing section is detailed and unambiguous.",
+    "rationale": "Steps map cleanly to independently testable units with no shared internal state. All unit tests use FakeBrowser/FakePage so no Playwright install is required for steps 1-4. Step 5 is opt-in via importorskip.",
+    "timestamp": "2026-10-04T06:46:43Z"
+  },
+  {
+    "id": "D-14",
+    "phase": 7,
+    "title": "Leave before_shot_raises in frozen acceptance fakes unremoved",
+    "status": "closed",
+    "priority": "low",
+    "decision": "tests/acceptance/phase_7/fakes.py retains the dead before_shot_raises attribute; tests/screenshot/fakes.py had it removed in review.",
+    "rationale": "Acceptance suite is protected and cannot be edited post-TESTS. The inconsistency is cosmetic — neither file reads the attribute — and the acceptance fakes are frozen by contract.",
+    "revisit_if": "Acceptance suite is superseded or regenerated for a later phase.",
+    "timestamp": "2026-10-04T10:22:37Z"
   }
 ]

@@ -70,5 +70,45 @@
     "status": "complete",
     "notes": "Update ARCH_structured_llm.md: (1) revise Out of Scope from no-prose-extraction to bounded-extraction note (fence strip + outermost balanced object; no general repair; no <think> until real inline-reasoning fixture exists); (2) update parse_json_response doc to describe the fallback; (3) append Change History row. Confirm all pre-existing parse_json_response tests still pass (additive change only).",
     "commit": "0c3c0f8"
+  },
+  {
+    "phase": 7,
+    "step": 1,
+    "title": "Package skeleton + types + import guard",
+    "status": "complete",
+    "notes": "Create src/toolkit/screenshot/__init__.py, types.py, _playwright.py. Implement Viewport, ShotSpec (with __post_init__ validation), ShotResult dataclasses; PageLike, BrowserLike, BrowserFactory protocols. Default browser factory in _playwright.py lazy-imports playwright.sync_api and raises ImportError with the exact guidance text. Add screenshot = [\"playwright>=1.47\"] extra to pyproject.toml. ~10 tests in tests/screenshot/test_types.py: each validation rule, str->Path normalisation, import guard via monkeypatched import that raises ImportError.",
+    "commit": "9cef18f"
+  },
+  {
+    "phase": 7,
+    "step": 2,
+    "title": "capture / capture_many over fake browser",
+    "status": "complete",
+    "notes": "Implement capture() and capture_many() in src/toolkit/screenshot/__init__.py. Cover every branch of the Outputs sequence: one browser launch+close per capture_many call (closed even on internal raise); per-spec fresh page with viewport/color_scheme; input-order results; empty list launches nothing; parent dirs created; strict behaviour; ok/path/error invariant. Tests in tests/screenshot/fakes.py (FakeBrowser/FakePage that record calls and can be configured to raise or return a status; FakePage.screenshot writes a placeholder file) and tests/screenshot/test_capture.py (~16 tests).",
+    "commit": "862235d"
+  },
+  {
+    "phase": 7,
+    "step": 3,
+    "title": "static_server context manager",
+    "status": "complete",
+    "notes": "Implement static_server() in src/toolkit/screenshot/__init__.py using stdlib http.server + threading. Tests in tests/screenshot/test_static_server.py (~7 tests via urllib.request against live loopback): serves files under mount; 404 outside it; base URL ends in /; ephemeral port (port=0); shutdown on normal exit and on exception (port no longer accepting connections); FileNotFoundError if root not an existing directory; ValueError if mount does not start with /.",
+    "commit": "2ecb2bf"
+  },
+  {
+    "phase": 7,
+    "step": 4,
+    "title": "CLI: __main__.py + run_cli helper",
+    "status": "complete",
+    "notes": "Implement __main__.py with main() and run_cli(argv, browser_factory=...) in src/toolkit/screenshot/. Argument parsing and defaults; --color-scheme both file naming (<stem>-light<suffix> / <stem>-dark<suffix>); --serve/--mount URL resolution (URL relative to served base URL); stdout paths / stderr warning:/error: lines; exit codes 0 (all ok) / 1 (at least one not ok) / 2 (usage error or Playwright not installed, with guidance). Tests in tests/screenshot/test_cli.py (~10 tests) driven through run_cli(argv, browser_factory=fake).",
+    "commit": "b6d8723"
+  },
+  {
+    "phase": 7,
+    "step": 5,
+    "title": "Live smoke test + docs",
+    "status": "complete",
+    "notes": "tests/screenshot/test_live.py: one test that renders a tiny file:// HTML page with light/dark CSS via prefers-color-scheme; asserts both PNGs exist and differ; must pytest.importorskip(\"playwright.sync_api\") and skip cleanly when Chromium not installed. Docs: add toolkit.screenshot section to API.md (bump Last synced:); add module row to README module list if one exists; add Screenshot bullet to the Available Modules list in .llms/rules/toolkit.md. Do NOT edit CLAUDE.md or CODEX.md (protected worker adapters).",
+    "commit": "9c44ac8"
   }
 ]

@@ -46,6 +46,6 @@
     "title": "Screenshot - headless page capture (Playwright, optional extra)",
     "regime": "build",
     "dependencies": [],
-    "status": "pending"
+    "status": "complete"
   }
 ]
