@@ -9,6 +9,17 @@ backend = "claude"
 model = "sonnet"
 max_budget_usd = 5.00
 
+# Per-action backend split: codex builds, claude plans / authors the acceptance
+# suite / reviews / closes. Both run on subscription auth on pirozhok (claude
+# OAuth, codex ChatGPT login) - no provider API keys in the bot env. Codex's
+# model comes from ~/.codex/config.toml (i2c can't pass one to `codex exec`).
+[run.backends]
+plan = "claude"
+tests = "claude"
+execute = "codex"
+review = "claude"
+close = "claude"
+
 # Telegram surface (`i2c serve telegram`). The bot token comes from
 # $I2C_TELEGRAM_TOKEN (environment only). Fill admin_ids with the Telegram
 # user IDs allowed to issue mutating commands (/run, /batch, /clearboundary)

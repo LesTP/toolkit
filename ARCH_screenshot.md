@@ -299,8 +299,9 @@ may require Playwright or Chromium to be installed.**
   `pytest.importorskip("playwright.sync_api")` and skip cleanly (not fail)
   when Chromium is not installed. Add the `toolkit.screenshot` section to
   `API.md` (bump `Last synced:`), the module row to the README module list
-  if one exists, and the "Screenshot" bullet to the toolkit rule's
-  "Available Modules" list in `CLAUDE.md`.
+  if one exists, and the "Screenshot" bullet to the "Available Modules" list
+  in `.llms/rules/toolkit.md`. Do **not** edit `CLAUDE.md` / `CODEX.md`
+  (protected worker adapters).
 
 ## Escalation Triggers
 
