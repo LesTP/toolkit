@@ -18,6 +18,7 @@
 | Coaching | Tag-based operator-input parser. Reads `TAG: content` notes into typed `CoachingEvent` (routed to a consumer-defined queue with a canonical type) and `/command args` into typed `Command` objects. Tag vocabulary and command list loaded from YAML or pre-parsed dict. PyYAML lazy-imported in the file loader only. | none (leaf) | Extracted from Diplomat 2026-06-05; Clanker Courts queued as second consumer |
 | Edit Classifier | LLM-as-judge categorical classifier for review-gate edit logs. Takes `(original, edited, edit_notes)` and returns a typed `EditClassification` with category (one of six: tone_softer, tone_harder, commitment_removed, ambiguity_added, constraint_enforcement, persona_correction), confidence, rationale, classifier model, tz-aware timestamp. Project-side `build_*` factory pattern. | toolkit/structured_llm (one-way; the LLM client itself is injected through `structured_call`'s first argument) | Extracted from Diplomat 2026-06-07; Clanker Courts queued as second consumer |
 | Clankmates Client | Subprocess wrapper around the `clankm` CLI for Clankmates messaging. Player-side ops: `whoami`, `list_threads`, `show_thread`, `archive_thread`, `send`, `reply`. Message decoders (`decode.py`), thread-cursor persistence (`cursor.py`), peer-DM screening rules (`screen.py`). | none (leaf) | Complete 2026-06-11; vendored from clanker-courts-player-client 2026-06-10; consumers: Diplomat (arena), Clanker Courts (game_transport adapter) |
+| Screenshot | Headless page capture: URL or static build dir → PNG at a chosen viewport / color scheme, via Python API or `python -m toolkit.screenshot`. Consumer `before_shot` hook for app-specific interaction; loopback static server for built sites. Playwright lazy-imported (optional extra). | none (leaf) | Ported from `_screenshot-tool` (Node, build-a-stew) 2026-10; consumers: build-a-stew, Marginalia, i2c dashboard verification |
 
 ## Data Flow
 
@@ -29,6 +30,7 @@
 - **TelegramUpdate** — chat_id, user_id, message_text, command, args, message_id, raw
 - **Prompt Regression RunReport** — scenario results, property outcomes, judge verdicts, and summary counts
 - **Structured LLM JSON object** — parsed dict response validated against a caller-provided JSON Schema
+- **ShotSpec / ShotResult** — what to capture (url, out_path, viewport, color scheme, timing, strict, before_shot hook) / outcome (ok, path, error, warnings)
 
 ### Flow
 No data flows between toolkit modules. Each is a leaf consumed independently by application projects. Application projects wire them together:
@@ -62,6 +64,7 @@ Diplomat:        Prompt scenarios → Prompt Regression → diplomat module call
 | 12 | Coaching | Tag-based operator-input parser extracted from Diplomat. YAML config (lazy-imported) or pre-parsed dict. Clanker Courts incoming as second consumer. | Complete — extracted 2026-06-05 |
 | 13 | Edit Classifier | LLM-as-judge categorical classifier extracted from Diplomat. Six-category enum (project-side factory + prompt). Clanker Courts incoming as second consumer. | Complete — extracted 2026-06-07 |
 | 14 | Clankmates Client | Subprocess wrapper + message decoders + cursor store + peer-DM screener. Vendored from clanker-courts-player-client; extended for toolkit reuse. Consumers: Diplomat (arena), Clanker Courts. | Complete |
+| 15 | Screenshot | Leaf. Headless page capture so any worker backend can see the web UI it builds (shell command, no MCP). Ported from `_screenshot-tool`; second consumer = Marginalia (+ build-a-stew, i2c dashboard D-dash-10). i2c phase 7; contract + steps in `ARCH_screenshot.md`. | Not started |
 
 ## Coupling Notes
 
@@ -102,6 +105,12 @@ Date: 2026-06-02 | Status: Closed
 Decision: When `feedback_collector` was extracted from Phosphene, its prior static import of `NoteInput` / `NotePatch` from `phosphene.memory_store` was replaced with internal `_NoteInput` / `_NotePatch` dataclasses defined in `toolkit.feedback_collector.types`. The internal dataclasses mirror Phosphene's field names and types exactly. The collector requires a `memory_store` instance that structurally supports `get_note(id)`, `store_note(note)`, and `update_note(id, patch)` — Phosphene's `MemoryStore` satisfies this by duck typing, with no Phosphene-side wiring change.
 Rationale: Avoids introducing a `toolkit.feedback_collector → phosphene.memory_store` cross-project import, which would violate the consumer-coupling direction (toolkit never imports from consumer projects). Avoids introducing a `toolkit.feedback_collector → toolkit.memory_store` cross-module dep, which would violate D-1. Duck typing keeps the contract honest without locking the consumer to a specific note shape.
 Revisit if: The internal `_NoteInput` / `_NotePatch` shapes drift from real consumer memory APIs and need to become a proper exported Protocol with declared methods.
+
+D-5: Screenshot is generic capture; app interaction is a consumer hook
+Date: 2026-10-03 | Status: Closed
+Decision: `toolkit.screenshot` only navigates, waits, and captures (viewport, `prefers-color-scheme` emulation, full-page). Anything app-specific — clicking an in-app theme toggle, opening a modal, filling a form — is passed in as a `before_shot(page)` callback by the consumer. Playwright is lazy-imported behind an optional extra (`toolkit[screenshot]`), and the browser is injectable so all unit tests run against fakes. Exposed as a CLI (`python -m toolkit.screenshot`) as well as a Python API.
+Rationale: Keeps the module domain-free (PROJECT.md exclusion: no application logic) while still covering the original tool's interaction scripts. A shell CLI works identically for every worker backend (Claude, Codex, pi.dev) on the Pi, unlike per-backend MCP browser servers. Lazy import preserves the core's no-heavy-deps posture.
+Revisit if: Several consumers need the same interaction helpers (then add a small helper set), or a consumer needs async capture.
 
 ## Provisional Contracts
 

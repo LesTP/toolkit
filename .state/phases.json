@@ -39,5 +39,13 @@
       "llm_client"
     ],
     "status": "complete"
+  },
+  {
+    "id": 7,
+    "module": "screenshot",
+    "title": "Screenshot - headless page capture (Playwright, optional extra)",
+    "regime": "build",
+    "dependencies": [],
+    "status": "pending"
   }
 ]

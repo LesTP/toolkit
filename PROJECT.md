@@ -22,6 +22,7 @@ The author's own projects. Currently: Phosphene (autonomous personality agent), 
 - Prompt Regression: scenario-based prompt regression framework — JSON path checks and LLM-as-judge evaluation
 - Structured LLM: LLM JSON extraction with schema injection, validation, and retry
 - Coaching: tag-based operator-input parser — YAML-driven tag routes and slash-command vocabulary, parses to typed `CoachingEvent` / `Command`
+- Screenshot: headless web-page capture — URL or static build dir → PNG at a chosen viewport / color scheme, via Python API or `python -m toolkit.screenshot`; Playwright as an optional extra. Consumers: build-a-stew, Marginalia, i2c dashboard verification
 
 ### Core (composing — depends on one leaf module)
 - Cost Accountant → LLM Client: cost tracking and budget enforcement — wraps LLM Client with pre-call estimation, per-call/operation/session budget checking, append-only JSONL ledger, rate-limit and spending-cap abort
