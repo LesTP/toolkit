@@ -1,4 +1,5 @@
 """Headless page capture with an optional Playwright browser provider."""
+from .capture import capture, capture_many
 from .types import (
     BrowserFactory,
     BrowserLike,
@@ -11,5 +12,5 @@ from .types import (
 
 __all__ = [
     "BrowserFactory", "BrowserLike", "ColorScheme", "PageLike",
-    "ShotResult", "ShotSpec", "Viewport",
+    "ShotResult", "ShotSpec", "Viewport", "capture", "capture_many",
 ]
