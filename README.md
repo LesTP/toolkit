@@ -24,6 +24,23 @@ pip install -e ".[ws]"
 
 ## Modules
 
+### `toolkit.screenshot`
+
+Headless Chromium PNG capture for URLs and static build directories, with
+viewport and light/dark emulation, shared-browser batches, and consumer-owned
+interaction hooks. See [the API contract](API.md#toolkitscreenshot).
+
+```bash
+pip install "toolkit[screenshot]"
+python -m playwright install chromium
+python -m toolkit.screenshot https://example.com --out shots/home.png --color-scheme both
+python -m toolkit.screenshot . --serve dist --mount /app/ --out shots/local.png --full-page
+```
+
+Run the optional live smoke test with `TOOLKIT_SCREENSHOT_LIVE=1`; it skips when
+Playwright or Chromium is unavailable. Unit tests use injected fake browsers.
+
+
 ### `toolkit.telegram_client`
 
 Async Telegram Bot API client with long polling, MarkdownV2 formatting, and message splitting.

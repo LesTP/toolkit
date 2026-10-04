@@ -17,6 +17,7 @@ Determine the active module from ARCHITECTURE.md's Implementation Sequence table
 ## Available Modules
 
 Leaf modules (no toolkit dependencies):
+- Screenshot — headless Chromium PNG capture for URLs and static builds; optional Playwright extra (ARCH_screenshot.md)
 - Embedding — text → vector embeddings (ARCH_embedding.md)
 - Clustering — semantic grouping over embeddings (ARCH_clustering.md)
 - LLM Client — provider-agnostic LLM API (ARCH_llm_client.md)

@@ -5,7 +5,7 @@ in consumer projects where toolkit is not importable.
 
 **Consumers:** Diplomat, Phosphene, Codexbot, Year-in-Search, TGBot
 
-Last synced: 2026-06-10
+Last synced: 2026-10-04
 
 ---
 
@@ -839,3 +839,142 @@ EDIT_CLASSIFICATION_SCHEMA: dict[str, Any]  # JSON schema for structured_call
 - Consumers wrap the constructor in a project-side `build_edit_classifier(...)` factory that translates the project's own config-file shape (e.g. Diplomat's `pipeline.yaml` `{"primary": {...}}` convention) into the kwargs above. Mirror Diplomat's `build_reconciler` pattern.
 - The prompt file is read once at construction. Diplomat's bundled prompt is a reasonable starting point; consumers can tweak per-domain wording while keeping the six-category structure.
 - The LLM client can be anything exposing `await complete(**kwargs)` — `toolkit.llm_client` is the obvious choice but not required.
+
+
+---
+
+## toolkit.screenshot
+
+**Consumers:** build-a-stew, Marginalia, i2c dashboard
+
+Synchronous headless Chromium page capture. No toolkit dependencies; Playwright
+is lazy-imported only by the default browser factory. Install with
+`pip install "toolkit[screenshot]"`, then `python -m playwright install chromium`.
+Call from synchronous code outside a running asyncio loop.
+
+### Types
+
+```python
+ColorScheme = Literal["light", "dark"]
+
+@dataclass(frozen=True)
+class Viewport:
+    width: int = 1600
+    height: int = 1000
+
+@dataclass(frozen=True)
+class ShotSpec:
+    url: str
+    out_path: Path
+    viewport: Viewport = Viewport()
+    full_page: bool = False
+    color_scheme: ColorScheme | None = None
+    wait_until: Literal["load", "domcontentloaded", "networkidle"] = "networkidle"
+    settle_ms: int = 500
+    timeout_ms: int = 30000
+    strict: bool = False
+    before_shot: Callable[[PageLike], None] | None = None
+
+@dataclass(frozen=True)
+class ShotResult:
+    spec: ShotSpec
+    ok: bool
+    path: Path | None
+    error: str | None
+    warnings: tuple[str, ...]
+
+class PageLike(Protocol):
+    def goto(self, url: str, *, wait_until: str, timeout: float) -> Any: ...
+    def wait_for_timeout(self, timeout: float) -> None: ...
+    def screenshot(self, *, path: str, full_page: bool) -> Any: ...
+    def close(self) -> None: ...
+
+class BrowserLike(Protocol):
+    def new_page(self, *, viewport: dict[str, int],
+                 color_scheme: str | None) -> PageLike: ...
+    def close(self) -> None: ...
+
+BrowserFactory = Callable[[], ContextManager[BrowserLike]]
+```
+
+`ShotSpec` normalizes string output paths to `Path`. Construction raises
+`ValueError` for empty URLs or schemes other than http/https/file, non-PNG output
+suffixes (case-insensitive), non-positive viewport dimensions or timeout,
+negative settle time, or unknown color scheme or wait mode.
+
+### Functions
+
+```python
+capture(spec: ShotSpec, *, browser_factory: BrowserFactory | None = None) -> ShotResult
+capture_many(specs: Sequence[ShotSpec], *,
+             browser_factory: BrowserFactory | None = None) -> list[ShotResult]
+
+@contextmanager
+static_server(root: str | Path, *, mount: str = "/",
+              host: str = "127.0.0.1", port: int = 0) -> Iterator[str]
+
+main(argv: Sequence[str] | None = None) -> int
+run_cli(argv: Sequence[str] | None = None, *,
+        browser_factory: BrowserFactory | None = None) -> int
+```
+
+`capture(spec)` is equivalent to `capture_many([spec])[0]`. Batch captures share
+one browser, closed once, with a fresh page closed after every spec; results
+retain input order and page failures do not stop later captures. Empty input
+returns `[]` without launching a browser. Missing output parents are created.
+
+Navigation exceptions produce `navigation: <msg>` warnings and HTTP statuses
+at least 400 produce `http <status>` warnings. Capture continues unless
+`strict=True`, which returns that warning as the error without taking a shot.
+After navigation, the page settles (skipped for zero milliseconds), then the
+optional consumer-owned `before_shot` hook receives the raw page before capture.
+Page creation, hook, and screenshot failures return errors with `page:`,
+`before_shot: <ExceptionType>:`, and `screenshot:` prefixes respectively;
+settle failures use `settle:`. Page-close failures append `close:` warnings and
+never change success. For every result, `ok` iff `path is not None` iff
+`error is None`. Warnings preserve occurrence order.
+
+With the default factory, missing Playwright raises `ImportError` with this exact
+message: `toolkit.screenshot needs Playwright: pip install "toolkit[screenshot]" && python -m playwright install chromium`.
+Browser startup errors propagate; browser installation remains operator-owned.
+
+`static_server` serves an existing directory under `mount`, returning 404 outside
+that prefix. It yields a base URL ending in `/`, uses an ephemeral port when
+`port=0`, and shuts down and joins its thread even on exception. It raises
+`FileNotFoundError` for a missing or non-directory root and `ValueError` when
+`mount` does not begin with `/`. The default bind address is loopback.
+
+### Usage
+
+```python
+from pathlib import Path
+from toolkit.screenshot import ShotSpec, capture_many, static_server
+
+with static_server("dist", mount="/build-a-stew/") as base:
+    results = capture_many([
+        ShotSpec(base, Path("shots/home-light.png"), color_scheme="light"),
+        ShotSpec(base, Path("shots/home-dark.png"), color_scheme="dark"),
+    ])
+```
+
+Consumer-specific clicks, forms, and in-app theme toggles belong in
+`before_shot(page)`. Color-scheme emulation controls `prefers-color-scheme`.
+
+```bash
+python -m toolkit.screenshot https://example.com --out shots/home.png --color-scheme both
+python -m toolkit.screenshot . --serve dist --mount /build-a-stew/ --out shots/local.png --full-page
+```
+
+CLI flags: `--width 1600`, `--height 1000`, `--full-page`,
+`--color-scheme light|dark|both` (omitted means no emulation), `--settle-ms 500`,
+`--timeout-ms 30000`, `--strict`, `--serve DIR`, and `--mount /prefix/`.
+`both` writes `<stem>-light<suffix>` and `<stem>-dark<suffix>`. With `--serve`,
+the positional URL resolves relative to the mounted base URL. Written paths
+appear on stdout, one per line; stderr diagnostics start with `warning:` or
+`error:`. Exit codes: 0 for all captures successful, 1 for capture failure,
+2 for usage errors or missing Playwright. `run_cli` permits factory injection
+for tests; the shell entry point uses the default factory.
+
+The optional live smoke test requires operator-installed Playwright and Chromium:
+`TOOLKIT_SCREENSHOT_LIVE=1 PYTHONPATH=src python -m pytest tests/screenshot/test_live.py`.
+It skips when Playwright or the Chromium executable is unavailable.
